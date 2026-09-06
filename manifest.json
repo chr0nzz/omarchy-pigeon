@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "xyzlab.pigeon",
   "name": "Pigeon",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "author": "xyzlab",
   "license": "MIT",
   "description": "ntfy inbox for the Omarchy bar. Live push notifications from ntfy.sh or a self-hosted server, with toasts, actions, attachments, and a compose box.",

@@ -1,13 +1,8 @@
 .pragma library
 .import "Emojis.js" as Emojis
 
-// Pure helpers shared by the service, bar widget and panel. No QML state in
-// here so every function is unit-testable with plain arguments.
-
 var PRIORITY_NAMES = { 1: "min", 2: "low", 3: "default", 4: "high", 5: "urgent" }
 
-// Lists that cross a QML model boundary arrive as QVariantList, which is not
-// a JS Array (Array.isArray is false). Copy anything list-like into one.
 function toList(value) {
   if (!value || typeof value !== "object" || typeof value.length !== "number") return []
   var out = []
@@ -25,8 +20,6 @@ function priorityName(value) {
   return PRIORITY_NAMES[clampPriority(value)] || "default"
 }
 
-// freedesktop urgency for a ntfy priority. 1-2 -> low, 3 -> normal,
-// 4-5 -> critical. Critical toasts stay on screen until dismissed.
 function urgencyFor(priority) {
   var p = clampPriority(priority)
   if (p <= 2) return "low"
@@ -34,17 +27,14 @@ function urgencyFor(priority) {
   return "critical"
 }
 
-// Nerd-font glyph for a priority. Used when the message carries no emoji tag.
 function priorityGlyph(priority) {
   var p = clampPriority(priority)
-  if (p === 5) return "󱅫"   // bell-alert
-  if (p === 4) return "󰂞"   // bell-ring
-  if (p === 1) return "󰂛"   // bell-off (silent)
-  return "󰍡"                // message
+  if (p === 5) return "󱅫"
+  if (p === 4) return "󰂞"
+  if (p === 1) return "󰂛"
+  return "󰍡"
 }
 
-// Split ntfy tags into emoji (rendered as a prefix, like the official apps)
-// and plain tags (rendered as text chips).
 function splitTags(tags) {
   var emoji = []
   var plain = []
@@ -85,7 +75,6 @@ function validTopic(value) {
   return /^[-_A-Za-z0-9]{1,64}$/.test(String(value || ""))
 }
 
-// Authorization header value for the configured auth mode, or "" for none.
 function authHeader(mode, token, username, password) {
   var m = String(mode || "none").toLowerCase()
   if (m === "token" || m === "bearer") {
@@ -100,8 +89,6 @@ function authHeader(mode, token, username, password) {
   return ""
 }
 
-// since= parameter for the subscription URL. A stored cursor (unix seconds
-// of the newest message we have) wins; otherwise the configured backfill.
 function sinceParam(cursorTime, backfill) {
   var c = Number(cursorTime)
   if (isFinite(c) && c > 0) return String(Math.floor(c))
@@ -117,7 +104,6 @@ function subscribeUrl(server, topics, since) {
   return url
 }
 
-// Shape a raw ntfy JSON event into the inbox record the UI renders.
 function normalizeMessage(raw, unread) {
   if (!raw || raw.event !== "message") return null
   var id = String(raw.id || "")
@@ -168,7 +154,6 @@ function normalizeMessage(raw, unread) {
   }
 }
 
-// Insert newest-first, dedupe by id, cap the list.
 function mergeMessage(list, msg, cap) {
   var out = []
   var placed = false
@@ -212,7 +197,6 @@ function displayTitle(msg) {
   return msg.topic || "Message"
 }
 
-// Title with emoji tags prefixed, as the official ntfy apps render it.
 function toastTitle(msg) {
   var tags = splitTags(msg.tags)
   var title = displayTitle(msg)
@@ -248,8 +232,6 @@ function isImageAttachment(att) {
 
 function pad2(n) { return (n < 10 ? "0" : "") + n }
 
-// Relative time for list rows: "now", "4m", "2h", "Yesterday 14:02",
-// "Mon 09:15", "3 Sep".
 function relativeTime(unixSeconds, nowMs) {
   var t = Number(unixSeconds) * 1000
   if (!isFinite(t) || t <= 0) return ""
@@ -309,8 +291,6 @@ function safeHttpUrl(url) {
   return /^https?:\/\//i.test(s) ? s : ""
 }
 
-// Message shape from a curl stream line. Returns { kind, data } where kind
-// is "message" | "open" | "keepalive" | "exit" | "other" | "invalid".
 function parseStreamLine(line) {
   var raw = String(line || "").trim()
   if (!raw) return { kind: "empty" }

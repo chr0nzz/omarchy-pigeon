@@ -4,8 +4,6 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Bar pill: pigeon glyph plus unread count. One copy exists per monitor; all
-// of them read from the single Pigeon service the shell hosts.
 BarWidget {
   id: root
   moduleName: "xyzlab.pigeon"
@@ -20,8 +18,6 @@ BarWidget {
   readonly property bool showZero: boolSetting("showZero", false)
   readonly property string customGlyph: String(setting("glyph", "") || "").trim()
 
-  // The pigeon (nf-md-bird). State is carried by colour, the count, and
-  // dimming, so the glyph itself stays put.
   readonly property string glyph: customGlyph || "󱗆"
   readonly property string countText: unread > 99 ? "99+" : String(unread)
   readonly property bool countVisible: !vertical && showCount && (unread > 0 || showZero)
@@ -62,8 +58,6 @@ BarWidget {
     if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()
   }
 
-  // Shape contract for shell.summon/hide/toggle routing (Bar.findPanelWidget
-  // requires open/close/opened on the bar-widget root).
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
   function open() {

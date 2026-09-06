@@ -4,13 +4,6 @@ import Quickshell.Io
 import qs.Commons
 import "Model.js" as Model
 
-// Pigeon service: one instance per shell, shared by every bar widget copy
-// (the bar is built once per monitor). Owns the ntfy subscription stream,
-// the inbox, its on-disk state, desktop toasts, and publishing.
-//
-// Transport is plain curl streaming `/topic1,topic2/json`. Credentials
-// travel in the child environment, never on the command line, so they do
-// not show up in `ps`.
 Item {
   id: root
   visible: false
@@ -23,11 +16,6 @@ Item {
   readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || home + "/.local/state") + "/omarchy/pigeon"
   readonly property string statePath: stateDir + "/state.json"
 
-  // ------------------------------------------------------------- settings
-  //
-  // Settings live inline on the widget's shell.json layout entry (the
-  // only entry this plugin has). Merged over the manifest defaults so a
-  // missing key never reads as undefined.
   readonly property var defaults: manifest && manifest.barWidget && manifest.barWidget.defaults ? manifest.barWidget.defaults : ({})
   readonly property var settings: resolveSettings(shell ? shell.shellConfig : null)
 
@@ -89,8 +77,6 @@ Item {
   readonly property bool allowHttpActions: boolSetting("allowHttpActions", false)
   readonly property bool configured: server !== "" && topics.length > 0
 
-  // Topics subscribed at the last save. Removing a topic from the settings
-  // unsubscribes it the way the ntfy apps do: its messages go with it.
   property var subscribedTopics: []
   onTopicsChanged: if (stateLoaded) reconcileTopics()
 
@@ -113,29 +99,22 @@ Item {
   }
   readonly property bool authIncomplete: authMode !== "none" && authHeader === ""
 
-  // Anything in here changing means the subscription must be rebuilt.
   readonly property string connectionKey: server + "\n" + topics.join(",") + "\n" + authHeader + "\n" + backfill
   onConnectionKeyChanged: if (stateLoaded) reconnectSoon.restart()
 
-  // ---------------------------------------------------------------- state
   property var messages: []
   property int unreadCount: 0
   property int urgentUnreadCount: 0
-  // Newest message time seen per topic. A topic without a cursor is new to
-  // us and gets the configured backfill window on the next connect.
   property var cursors: ({})
   property double cursorTime: 0
-  // Ids deleted locally. They are skipped when the server replays history so
-  // a reload never resurrects what you removed.
   property var tombstones: ({})
-  property double muteUntil: 0        // 0 = off, -1 = until turned off, else ms epoch
+  property double muteUntil: 0
   property double nowMs: Date.now()
   readonly property bool muted: muteUntil < 0 || muteUntil > nowMs
 
   property bool stateLoaded: false
   property bool dirReady: false
 
-  // "unconfigured" | "connecting" | "connected" | "reconnecting" | "error"
   property string status: "unconfigured"
   property string lastError: ""
   property double connectedSince: 0
@@ -143,29 +122,19 @@ Item {
   property int backoffMs: 2000
   property int reconnectAttempts: 0
   property bool forceBackfill: false
-  // Cursor snapshot taken when the stream starts. History replays in
-  // chronological order, so judging "new" against the live cursor would
-  // promote every backfilled message after the first to a toast.
   property var streamCursors: ({})
   property double streamStartedAt: 0
   property int lastHttpCode: 0
   property string lastHttpBody: ""
   property string lastStderr: ""
 
-  // Publishing (compose box + IPC).
   property bool publishing: false
   property string publishStatus: ""
   property bool publishOk: false
 
-  // HTTP action outcome per "<msgId>:<index>": "running" | "ok" | "failed …".
   property var actionStates: ({})
 
-  // Ids of messages this client published. They still land in the inbox
-  // (read, since you wrote them) but never toast back at you.
   property var ownIds: ({})
-  // The stream usually delivers a published message before the publish
-  // reply carries its id, so also remember what was just sent and match
-  // on content for a short window.
   property var ownPending: []
 
   function isOwnMessage(raw) {
@@ -216,7 +185,6 @@ Item {
     return Model.countUnread(messages, topic).unread
   }
 
-  // ---------------------------------------------------------- persistence
   Process {
     id: mkdirProc
     command: ["mkdir", "-p", root.stateDir]
@@ -253,8 +221,6 @@ Item {
     recount()
     if (!stateLoaded) {
       stateLoaded = true
-      // A state file from before this key exists: adopt the current list and
-      // drop whatever was collected for topics that are no longer on it.
       if (subscribedTopics.length === 0) {
         var seen = {}
         for (var m = 0; m < messages.length; m++) if (messages[m]) seen[messages[m].topic] = true
@@ -288,7 +254,6 @@ Item {
     stateFile.setText(JSON.stringify(payload))
   }
 
-  // ------------------------------------------------------------ streaming
   Timer {
     id: reconnectSoon
     interval: 250
@@ -300,8 +265,6 @@ Item {
     onTriggered: root.startStream()
   }
 
-  // ntfy sends a keepalive every 45s. Silence for much longer means the
-  // TCP connection died without curl noticing (sleep, Wi-Fi roam, VPN flip).
   Timer {
     id: watchdog
     interval: 120000
@@ -317,8 +280,6 @@ Item {
     backoffMs = 2000
     reconnectAttempts = 0
     if (streamProc.running) {
-      // onExited will call startStream via scheduleReconnect; flag it as a
-      // deliberate restart so no backoff applies.
       restartRequested = true
       streamProc.running = false
       return
@@ -339,11 +300,6 @@ Item {
       status = "unconfigured"
       return
     }
-    // Ask for the configured backfill window when any subscribed topic has
-    // never been seen (or a reload was requested); otherwise resume from the
-    // oldest per-topic cursor. Anything older than a topic's cursor is
-    // history: kept, read, never toasted. Dedupe and tombstones make the
-    // wider window harmless for topics we already know.
     var oldest = 0
     var fresh = forceBackfill
     for (var i = 0; i < topics.length; i++) {
@@ -373,8 +329,6 @@ Item {
       return
     }
     reconnectAttempts++
-    // Auth / topic errors will not fix themselves in two seconds. Poll them
-    // slowly so a token added later still picks up without a restart.
     var configError = lastHttpCode === 401 || lastHttpCode === 403 || lastHttpCode === 404
     var delay = configError ? 60000 : backoffMs
     backoffMs = Math.min(60000, backoffMs * 2)
@@ -396,8 +350,6 @@ Item {
     }
     stderr: SplitParser {
       onRead: function(line) {
-        // curl prints multi-line explanations for some failures; the first
-        // line is the one that names the problem.
         var s = String(line || "").trim()
         if (s && !root.lastStderr) root.lastStderr = s.replace(/^curl:\s*\(\d+\)\s*/, "")
       }
@@ -449,8 +401,6 @@ Item {
     var topic = String(raw.topic || "")
     var cursor = Number(cursors[topic] || 0)
     var time = Number(raw.time || 0)
-    // Known topic: new means newer than where we left off. Unknown topic:
-    // new means it arrived after this stream opened (history replays first).
     var snap = Number(streamCursors[topic] || 0)
     var isNew = snap > 0 ? time > snap : time > streamStartedAt - 5
     var own = isOwnMessage(raw)
@@ -471,7 +421,6 @@ Item {
     if (isNew && !own) maybeToast(msg)
   }
 
-  // ---------------------------------------------------------------- toasts
   function maybeToast(msg) {
     if (!toastsEnabled || muted) return
     if (msg.priority < toastMinPriority) return
@@ -487,7 +436,6 @@ Item {
     Quickshell.execDetached(argv)
   }
 
-  // ---------------------------------------------------------------- inbox
   function messageById(id) {
     for (var i = 0; i < messages.length; i++) if (messages[i] && messages[i].id === id) return messages[i]
     return null
@@ -529,7 +477,6 @@ Item {
   function bury(ids) {
     var next = {}
     var keys = Object.keys(tombstones)
-    // Keep the newest thousand; older ones have long expired on the server.
     var start = Math.max(0, keys.length + ids.length - 1000)
     for (var i = start; i < keys.length; i++) next[keys[i]] = true
     for (var j = 0; j < ids.length; j++) next[ids[j]] = true
@@ -559,15 +506,12 @@ Item {
     scheduleSave()
   }
 
-  // Re-fetch the backfill window from the server. Known messages are
-  // deduped, deleted ones stay deleted, and nothing old is toasted.
   function reload() {
     lastError = ""
     forceBackfill = true
     restartStream()
   }
 
-  // seconds > 0 mutes for that long, -1 mutes until turned off, 0 unmutes.
   function setMute(seconds) {
     var s = Number(seconds)
     if (!isFinite(s) || s === 0) muteUntil = 0
@@ -581,7 +525,6 @@ Item {
     setMute(muted ? 0 : -1)
   }
 
-  // --------------------------------------------------------------- actions
   function openUrl(url) {
     var safe = Model.safeHttpUrl(url)
     if (!safe) return false
@@ -675,7 +618,6 @@ Item {
     }
   }
 
-  // --------------------------------------------------------------- publish
   function publish(topic, title, message, priority, tags) {
     var t = String(topic || "").trim()
     if (!Model.validTopic(t)) return failPublish("Invalid topic name")
@@ -758,15 +700,6 @@ Item {
     onTriggered: if (!root.publishing) root.publishStatus = ""
   }
 
-  // ------------------------------------------------------------------- IPC
-  //
-  //   omarchy-shell pigeon status
-  //   omarchy-shell pigeon publish <topic> <title> <message>
-  //   omarchy-shell pigeon markAllRead
-  //   omarchy-shell pigeon clear
-  //   omarchy-shell pigeon mute <seconds|-1|0>
-  //   omarchy-shell pigeon reconnect
-  //   omarchy-shell pigeon reload          re-fetch server history (backfill window)
   IpcHandler {
     target: "pigeon"
 

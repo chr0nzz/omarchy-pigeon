@@ -3,10 +3,6 @@ import qs.Commons
 import qs.Ui
 import "../Model.js" as Model
 
-// One inbox entry. Collapsed shows glyph, title, two lines of body and a
-// meta line; expanded adds the full body, attachment preview, ntfy actions,
-// click link, copy, and the absolute timestamp. Visual state follows the
-// panel cursor (hasCursor) as every kit row does — never containsMouse.
 CursorSurface {
   id: row
 
@@ -37,9 +33,6 @@ CursorSurface {
   readonly property bool showInlineActions: hasCursor || mouse.containsMouse
   readonly property string priorityLabel: message.priority >= 5 ? "URGENT" : (message.priority === 4 ? "HIGH" : (message.priority <= 2 ? Model.priorityName(message.priority).toUpperCase() : ""))
 
-  // Meta-line parts. Computed here rather than read back from the children's
-  // `visible`: Item.visible reports effective visibility, so a container that
-  // asks its children whether to show latches hidden once it hides.
   readonly property bool showTopicMeta: showTopic && message.topic !== ""
   readonly property bool showPriorityMeta: priorityLabel !== ""
   readonly property bool showAttachmentMeta: hasAttachment && !expanded
@@ -214,7 +207,6 @@ CursorSurface {
         }
       }
 
-      // ---- Expanded extras
       Column {
         visible: row.expanded
         width: parent.width
@@ -320,7 +312,6 @@ CursorSurface {
       }
     }
 
-    // ---- Trailing: unread dot at rest, inline actions on hover/cursor.
     Item {
       id: trailing
       anchors.right: parent.right

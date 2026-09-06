@@ -6,9 +6,6 @@ import qs.Ui
 import "Model.js" as Model
 import "components"
 
-// Pigeon inbox popup. Mounted (hidden) by BarWidget.qml; the bar identifies
-// the popup by the widget in its slot, so `hostWidget` stands in for this
-// panel wherever the bar needs an owner (popout coordinator, Tab switching).
 Panel {
   id: root
   moduleName: "xyzlab.pigeon"
@@ -21,7 +18,6 @@ Panel {
   property bool openedFromHotkey: false
   readonly property var barIdentity: hostWidget || root
 
-  // ------------------------------------------------------------ open/close
   function open() {
     openedFromHotkey = false
     setCenterHoverRevealSuppressed(false)
@@ -70,14 +66,12 @@ Panel {
       root.bar.centerHoverRevealSuppressed = value
   }
 
-  // --------------------------------------------------------------- theme
   readonly property color fg: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(fg, 1.5)
   readonly property color urgentColor: bar ? bar.urgent : Color.urgent
   readonly property color accent: Color.accent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
-  // ------------------------------------------------------------ view state
   property string topicFilter: ""
   property string query: ""
   property bool searchOpen: false
@@ -90,8 +84,6 @@ Panel {
   property double nowMs: Date.now()
   property int composePriority: 3
 
-  // Settings editor. Draft values live here until Save writes them to the
-  // widget's shell.json entry through the shell; Cancel just drops them.
   property bool settingsOpen: false
   property string settingsStatus: ""
   property bool settingsError: false
@@ -167,7 +159,6 @@ Panel {
     onTriggered: root.nowMs = Date.now()
   }
 
-  // ---------------------------------------------------------- navigation
   function selectedMessage() {
     if (!rows.length) return null
     return rows[Math.max(0, Math.min(selectedIndex, rows.length - 1))]
@@ -274,7 +265,6 @@ Panel {
     composePriority = composePriority >= 5 ? 1 : composePriority + 1
   }
 
-  // ------------------------------------------------------------ settings
   function currentSetting(name, fallback) {
     var v = settings ? settings[name] : undefined
     if (v === undefined || v === null) {
@@ -330,8 +320,6 @@ Panel {
     settingsFocusTimer.restart()
   }
 
-  // The key press that opened the editor must finish propagating before a
-  // field takes focus, or the "s" itself lands in the server URL.
   Timer {
     id: settingsFocusTimer
     interval: 60
@@ -442,7 +430,6 @@ Panel {
     }
   }
 
-  // ------------------------------------------------------------------ UI
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -520,7 +507,6 @@ Panel {
         anchors.fill: parent
         spacing: Style.space(12)
 
-        // ---------- Hero: glyph · title · status · header actions ----------
         Item {
           width: parent.width
           implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, headerActions.implicitHeight)
@@ -634,7 +620,6 @@ Panel {
           }
         }
 
-        // ---------- Settings editor ----------
         FocusScope {
           id: settingsScope
           visible: root.settingsOpen
@@ -900,7 +885,6 @@ Panel {
           }
         }
 
-        // ---------- Setup hint when nothing is configured ----------
         Column {
           visible: !root.configured && !root.settingsOpen
           width: parent.width
@@ -929,7 +913,6 @@ Panel {
           }
         }
 
-        // ---------- Error detail ----------
         Text {
           visible: !root.settingsOpen && root.configured && root.service && root.service.status === "error" && root.service.lastError !== ""
           width: parent.width
@@ -945,7 +928,6 @@ Panel {
           foreground: root.fg
         }
 
-        // ---------- Topic tabs ----------
         Flow {
           visible: root.showTabs && !root.settingsOpen
           width: parent.width
@@ -967,7 +949,6 @@ Panel {
           }
         }
 
-        // ---------- Search ----------
         TextField {
           id: searchField
           visible: root.searchOpen && !root.settingsOpen
@@ -979,7 +960,6 @@ Panel {
           Keys.onPressed: function(event) { root.handleEditorKey(event, "search") }
         }
 
-        // ---------- Compose ----------
         Column {
           visible: root.composeOpen && !root.settingsOpen
           width: parent.width
@@ -1074,7 +1054,6 @@ Panel {
           PanelSeparator { foreground: root.fg }
         }
 
-        // ---------- Message list ----------
         ListView {
           id: list
           width: parent.width
@@ -1116,7 +1095,6 @@ Panel {
           }
         }
 
-        // ---------- Empty state ----------
         Text {
           visible: root.rows.length === 0 && root.configured && !root.settingsOpen
           width: parent.width
@@ -1130,7 +1108,6 @@ Panel {
           font.italic: true
         }
 
-        // ---------- Key hints ----------
         Text {
           visible: root.rows.length > 0 && !root.composeOpen && !root.settingsOpen
           width: parent.width
