@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "xyzlab",
   "license": "MIT",
-  "description": "ntfy inbox for the Omarchy bar. Live push notifications from ntfy.sh or a self-hosted server, with toasts, actions, attachments, and a compose box.",
+  "description": "ntfy inbox in the bar. Streams messages from ntfy.sh or your own server into a themed panel with topic tabs, search, toasts, unread badge, click and http actions, attachments, and a compose box. Token or basic auth.",
   "kinds": ["service", "bar-widget"],
   "keepLoaded": true,
   "entryPoints": {
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Pigeon",
-    "description": "ntfy inbox with unread badge, toasts, click actions, attachments and a compose box.",
+    "description": "ntfy inbox with unread badge, toasts, actions, attachments, and a compose box.",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "right",
