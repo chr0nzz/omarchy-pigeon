@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in Pigeon does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. omarchy bar set xyzlab.pigeon topics alerts
+        2. curl -d "hi" ntfy.sh/alerts
+        3. Open the panel
+    validations:
+      required: true
+  - type: input
+    id: pigeon
+    attributes:
+      label: Pigeon version
+      description: version in manifest.json, or the commit hash
+    validations:
+      required: true
+  - type: input
+    id: omarchy
+    attributes:
+      label: Omarchy version
+      placeholder: omarchy version
+    validations:
+      required: true
+  - type: dropdown
+    id: server
+    attributes:
+      label: Server
+      options:
+        - ntfy.sh
+        - Self-hosted
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Auth mode
+      options:
+        - none
+        - token
+        - basic
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of omarchy-shell pigeon status
+      description: Remove anything you do not want public
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Shell log
+      description: Output of quickshell log -i <instance> -t 100 around the time of the bug
+      render: shell

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/chr0nzz/omarchy-pigeon/security/advisories/new
+    about: Report privately, never as a public issue
+  - name: ntfy server problem
+    url: https://github.com/binwiederhier/ntfy/issues
+    about: Server side issues belong to the ntfy project
