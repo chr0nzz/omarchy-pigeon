@@ -105,7 +105,7 @@ Bar pill: left click opens the inbox, right click marks everything read, middle 
 | Tab / Shift-Tab | Switch to the neighbouring bar panel |
 | Esc | Close |
 
-Global shortcut in `~/.config/hypr/bindings.lua`, Omarchy leaves `SUPER + N` free:
+Global shortcut, add to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + N", "Pigeon inbox", "omarchy-shell shell toggle xyzlab.pigeon '{}'")
