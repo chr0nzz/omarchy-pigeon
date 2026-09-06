@@ -88,6 +88,29 @@ Item {
   readonly property int maxMessages: Math.max(20, parseInt(setting("maxMessages", 200), 10) || 200)
   readonly property bool allowHttpActions: boolSetting("allowHttpActions", false)
   readonly property bool configured: server !== "" && topics.length > 0
+
+  // Topics subscribed at the last save. Removing a topic from the settings
+  // unsubscribes it the way the ntfy apps do: its messages go with it.
+  property var subscribedTopics: []
+  onTopicsChanged: if (stateLoaded) reconcileTopics()
+
+  function reconcileTopics() {
+    var current = topics.slice()
+    var removed = []
+    for (var i = 0; i < subscribedTopics.length; i++) {
+      if (current.indexOf(subscribedTopics[i]) === -1) removed.push(subscribedTopics[i])
+    }
+    var same = removed.length === 0 && current.length === subscribedTopics.length
+    if (same) return
+    for (var r = 0; r < removed.length; r++) {
+      clear(removed[r])
+      var next = {}
+      for (var k in cursors) if (k !== removed[r]) next[k] = cursors[k]
+      cursors = next
+    }
+    subscribedTopics = current
+    scheduleSave()
+  }
   readonly property bool authIncomplete: authMode !== "none" && authHeader === ""
 
   // Anything in here changing means the subscription must be rebuilt.
@@ -222,6 +245,7 @@ Item {
       messages = cleaned.slice(0, maxMessages)
       cursorTime = Number(parsed.cursorTime || 0)
       cursors = Util.isPlainObject(parsed.cursors) ? parsed.cursors : {}
+      subscribedTopics = Array.isArray(parsed.subscribedTopics) ? parsed.subscribedTopics : []
       tombstones = Util.isPlainObject(parsed.tombstones) ? parsed.tombstones : {}
       muteUntil = Number(parsed.muteUntil || 0)
       if (muteUntil > 0 && muteUntil < Date.now()) muteUntil = 0
@@ -229,6 +253,14 @@ Item {
     recount()
     if (!stateLoaded) {
       stateLoaded = true
+      // A state file from before this key exists: adopt the current list and
+      // drop whatever was collected for topics that are no longer on it.
+      if (subscribedTopics.length === 0) {
+        var seen = {}
+        for (var m = 0; m < messages.length; m++) if (messages[m]) seen[messages[m].topic] = true
+        subscribedTopics = Object.keys(seen)
+      }
+      reconcileTopics()
       reconnectSoon.restart()
     }
   }
@@ -248,6 +280,7 @@ Item {
       savedAt: Date.now(),
       cursorTime: cursorTime,
       cursors: cursors,
+      subscribedTopics: subscribedTopics,
       tombstones: tombstones,
       muteUntil: muteUntil,
       messages: messages.slice(0, maxMessages)

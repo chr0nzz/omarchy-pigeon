@@ -11,7 +11,8 @@ Omarchy toast plus an entry in a themed popup inbox.
 - **Live stream, not polling.** One `curl` JSON stream per subscription, automatic reconnect with
   backoff, a keepalive watchdog, and catch-up of anything missed while the laptop slept.
   Adding a topic pulls its recent history (the `backfill` window) from the server's cache
-  automatically; `r` reloads it on demand. Deleted messages stay deleted.
+  automatically; `r` reloads it on demand. Removing a topic removes its messages, like
+  unsubscribing in the ntfy apps. Deleted messages stay deleted.
 - **Self-hosted first.** Anonymous, bearer token, or basic auth. Credentials are passed to curl
   through the process environment, so they never show up in `ps`.
 - **Bar pill** with a pigeon glyph and unread count. Follows the theme: accent colour when
