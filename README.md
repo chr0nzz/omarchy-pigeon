@@ -1,31 +1,21 @@
 # Pigeon
 
 A [ntfy](https://ntfy.sh) inbox for the [Omarchy](https://omarchy.org) bar. Pigeon keeps a live
-subscription open to ntfy.sh or your own self-hosted server and turns every message into an
-Omarchy toast plus an entry in a themed popup inbox.
+subscription open to ntfy.sh or your own server and turns every message into an Omarchy toast
+and an entry in a themed popup inbox.
 
 ![Pigeon panel](preview.png)
 
-## What you get
+## Features
 
-- **Live stream, not polling.** One `curl` JSON stream per subscription, automatic reconnect with
-  backoff, a keepalive watchdog, and catch-up of anything missed while the laptop slept.
-  Adding a topic pulls its recent history (the `backfill` window) from the server's cache
-  automatically; `r` reloads it on demand. Removing a topic removes its messages, like
-  unsubscribing in the ntfy apps. Deleted messages stay deleted.
-- **Self-hosted first.** Anonymous, bearer token, or basic auth. Credentials are passed to curl
-  through the process environment, so they never show up in `ps`.
-- **Bar pill** with a pigeon glyph and unread count. Follows the theme: accent colour when
-  something is unread, the theme's "active" colour when a high or urgent message is waiting,
-  dimmed when disconnected. Works in the left, center, or right section and on vertical bars.
-- **Native Omarchy toasts** with the message's emoji tag as glyph, ntfy priority mapped to
-  urgency, and a click that opens the message's link or the Pigeon panel.
-- **Inbox panel** with topic tabs, search, unread dots, expand-in-place, image attachment
-  preview, ntfy `view` and `http` actions, open link, copy, delete, mark read / unread, mark all
-  read, clear, mute, reconnect, and full keyboard navigation.
-- **Compose box** to publish to any topic on your server with a title and priority.
-- **IPC** so scripts can publish, mute, or read status through `omarchy-shell`.
-- Inbox and read state survive shell restarts (`~/.local/state/omarchy/pigeon/state.json`).
+- Live JSON stream per subscription with automatic reconnect, keepalive watchdog, and catch-up after sleep
+- Anonymous, access token, or username and password auth
+- Bar pill with unread count that follows the theme, works in any section and on vertical bars
+- Native Omarchy toasts with the message's emoji tag, ntfy priority mapped to urgency, and a click that opens the link or the panel
+- Inbox panel with topic tabs, search, unread dots, expand in place, image preview, `view` and `http` actions, open link, copy, delete, mark read or unread, mark all read, clear, mute, reconnect, and full keyboard navigation
+- Compose box to publish to any topic with a title and priority
+- IPC for scripts through `omarchy-shell`
+- Inbox and read state survive shell restarts
 
 ## Requirements
 
@@ -34,7 +24,7 @@ Omarchy 4 shell, `curl`, `jq`, `wl-copy`. All of them ship with Omarchy.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/<you>/omarchy-pigeon.git --enable
+omarchy plugin add https://github.com/chr0nzz/omarchy-pigeon.git --enable
 omarchy bar set xyzlab.pigeon server https://ntfy.example.com
 omarchy bar set xyzlab.pigeon topics alerts,home
 ```
@@ -46,33 +36,31 @@ omarchy bar move xyzlab.pigeon --section center
 omarchy bar move xyzlab.pigeon --section left --index 2
 ```
 
-Pigeon has no default topic on purpose: an unprotected topic name is a public address.
+Pigeon has no default topic. Pick a name that is hard to guess, an unprotected topic is a public address.
 
 ## Settings
 
-Press `s` (or the gear) in the panel to open the settings editor: server, topics, auth,
-toasts, bar options, and inbox limits, with Save and Cancel. Enter saves, Esc cancels, Tab
-moves between fields. Everything it writes lands inline on the widget entry in
-`~/.config/omarchy/shell.json`, so the CLI form below edits exactly the same values.
-Changes apply live either way.
+Press `s` or the gear in the panel to open the settings editor. Enter saves, Esc cancels, Tab moves
+between fields. It writes to the widget entry in `~/.config/omarchy/shell.json`, the same values
+`omarchy bar set` edits. Changes apply live.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `server` | `https://ntfy.sh` | Base URL of the ntfy server (reverse-proxy prefixes are fine) |
-| `topics` | `""` | Comma separated topic names to subscribe to |
+| `server` | `https://ntfy.sh` | Base URL of the ntfy server, reverse proxy prefixes are fine |
+| `topics` | `""` | Comma separated topic names |
 | `auth` | `none` | `none`, `token`, or `basic` |
-| `token` | `""` | Access token for `auth = token` (`ntfy token add` or the web UI) |
+| `token` | `""` | Access token for `auth = token` |
 | `username` / `password` | `""` | Credentials for `auth = basic` |
-| `toasts` | `true` | Show Omarchy desktop toasts for new messages |
+| `toasts` | `true` | Show desktop toasts for new messages |
 | `toastMinPriority` | `2` | Lowest ntfy priority (1 to 5) that produces a toast |
-| `backfill` | `all` | History to load for a new topic: everything the server still caches, or `12h`, `3d`, `none` |
+| `backfill` | `all` | History to load for a new topic: `all`, `12h`, `3d`, or `none` |
 | `maxMessages` | `200` | Messages kept in the inbox |
-| `allowHttpActions` | `false` | Let publisher-defined `http` actions run (opt-in on purpose) |
-| `showCount` | `true` | Show the unread count next to the bell |
+| `allowHttpActions` | `false` | Let publisher defined `http` actions run |
+| `showCount` | `true` | Show the unread count next to the glyph |
 | `showZero` | `false` | Show the count even when it is zero |
 | `glyph` | `""` | Replace the pigeon with your own glyph |
 
-Example with a token on a self-hosted server:
+Token auth on a self-hosted server:
 
 ```bash
 omarchy bar set xyzlab.pigeon server https://ntfy.example.com
@@ -81,15 +69,11 @@ omarchy bar set xyzlab.pigeon token tk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 omarchy bar set xyzlab.pigeon topics alerts,backups,home
 ```
 
-Auth and topic errors (401, 403, 404) are shown in the panel header and retried once a minute,
-so fixing the setting is enough.
+Auth and topic errors (401, 403, 404) show in the panel header and retry once a minute.
 
-## Using it
+## Usage
 
-Bar pill: left click opens the inbox, right click marks everything read, middle click toggles
-mute.
-
-Panel keys:
+Bar pill: left click opens the inbox, right click marks everything read, middle click toggles mute.
 
 | Key | Action |
 | --- | --- |
@@ -101,19 +85,18 @@ Panel keys:
 | `1` `2` `3` | Run the matching ntfy action |
 | `y` | Copy the message |
 | `d`, `x`, Delete | Delete the message |
-| `D` | Clear the inbox (or the current topic tab), with confirmation |
-| `u` | Mark all read (current tab) |
+| `D` | Clear the inbox or the current topic tab, with confirmation |
+| `u` | Mark all read in the current tab |
 | `m` | Mute or unmute toasts |
 | `s` | Open the settings editor |
-| `r` | Reload: re-fetch the backfill window from the server |
+| `r` | Reload the backfill window from the server |
 | `c` | Compose. Enter sends, Esc closes |
 | `/` | Search. Enter returns to the list, Esc clears |
 | `g` / `G` | First / last message |
 | Tab / Shift-Tab | Switch to the neighbouring bar panel |
 | Esc | Close |
 
-A global shortcut is one line in `~/.config/hypr/bindings.lua` (Omarchy leaves `SUPER + N`
-free):
+Global shortcut in `~/.config/hypr/bindings.lua`, Omarchy leaves `SUPER + N` free:
 
 ```lua
 o.bind("SUPER + N", "Pigeon inbox", "omarchy-shell shell toggle xyzlab.pigeon '{}'")
@@ -122,40 +105,39 @@ o.bind("SUPER + N", "Pigeon inbox", "omarchy-shell shell toggle xyzlab.pigeon '{
 ## IPC
 
 ```bash
-omarchy-shell pigeon status                              # JSON: state, unread, topics, last error
-omarchy-shell pigeon publish alerts "Title" "Message"   # publish through the configured server
+omarchy-shell pigeon status
+omarchy-shell pigeon publish alerts "Title" "Message"
 omarchy-shell pigeon markAllRead
 omarchy-shell pigeon clear
-omarchy-shell pigeon mute 3600                           # seconds; -1 = until unmuted
+omarchy-shell pigeon mute 3600
 omarchy-shell pigeon unmute
 omarchy-shell pigeon reconnect
-omarchy-shell pigeon reload                              # re-fetch server history
-omarchy-shell shell toggle xyzlab.pigeon '{}'            # open / close the panel
+omarchy-shell pigeon reload
+omarchy-shell shell toggle xyzlab.pigeon '{}'
 ```
 
-Messages you publish from Pigeon show up in the inbox already read and never toast.
+| Command | Effect |
+| --- | --- |
+| `status` | JSON with state, unread and urgent counts, topics, last error |
+| `publish <topic> <title> <message>` | Publish through the configured server |
+| `mute <seconds>` | Mute toasts, `-1` mutes until `unmute` |
+| `reload` | Re-fetch the backfill window from the server |
+| `shell toggle` | Open or close the panel |
 
-## How it works
+Messages you publish from Pigeon show up already read and never toast.
 
-- `Service.qml` is a shell service (one per session). It resolves settings from the widget's
-  shell.json entry, runs `curl -N .../topic1,topic2/json?since=…` and parses the JSON lines,
-  keeps the inbox, writes state, sends toasts through `omarchy-notification-send`, and publishes
-  with a JSON POST.
-- `BarWidget.qml` is the pill. Every monitor gets one; they all read the service.
-- `Panel.qml` and `components/MessageRow.qml` are the popup, built on the shell's own
-  `KeyboardPanel`, `CursorSurface`, `Button`, `TextField`, and `ConfirmDialog` so it inherits
-  the active theme's colours, spacing, corner radius, and font automatically.
-- `Model.js` holds the pure logic (parsing, priorities, tags, time formatting). `Emojis.js` is
-  the ntfy emoji tag table.
+## State
 
-Nothing outside curl, jq, and the shell is used. No Python, no daemon, no extra socket.
+| Path | Content |
+| --- | --- |
+| `~/.config/omarchy/shell.json` | Settings, including credentials |
+| `~/.local/state/omarchy/pigeon/state.json` | Inbox, read state, per-topic cursors, deleted ids |
 
-## Development
+## Contributing
 
-The plugin directory is a plain git checkout. Edits hot-reload; if something does not apply,
-run `omarchy restart shell`. `quickshell log -i <instance> -t 100` shows QML errors
-(`quickshell list --all` prints the instance id).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, layout, tests, and style.
+Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)
