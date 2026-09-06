@@ -204,10 +204,7 @@ function toastTitle(msg) {
 }
 
 function toastBody(msg) {
-  var body = String(msg.message || "")
-  var t = String(msg.title || "").trim()
-  if (!t) return body
-  return body
+  return String(msg.message || "")
 }
 
 function truncate(text, max) {

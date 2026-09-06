@@ -602,7 +602,7 @@ Item {
     environment: ({ PIGEON_METHOD: method, PIGEON_HEADERS: headersJson, PIGEON_BODY: body })
     command: ["bash", "-c",
       'args=(-sS --connect-timeout 15 --max-time 30 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0"); '
-      + 'while IFS= read -r h; do [[ -n $h ]] && args+=(-H "$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)"\' <<<"${PIGEON_HEADERS:-{}}" 2>/dev/null); '
+      + 'while IFS= read -r h; do [[ -n $h ]] && args+=(-H "$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)"\' <<<"$PIGEON_HEADERS" 2>/dev/null); '
       + 'if [[ -n ${PIGEON_BODY:-} ]]; then args+=(--data-binary "$PIGEON_BODY"); fi; '
       + 'curl "${args[@]}" -o /dev/null -w "%{http_code}" -- "$1"',
       "pigeon-action", targetUrl]
