@@ -10,6 +10,8 @@ Omarchy toast plus an entry in a themed popup inbox.
 
 - **Live stream, not polling.** One `curl` JSON stream per subscription, automatic reconnect with
   backoff, a keepalive watchdog, and catch-up of anything missed while the laptop slept.
+  Adding a topic pulls its recent history (the `backfill` window) from the server's cache
+  automatically; `r` reloads it on demand. Deleted messages stay deleted.
 - **Self-hosted first.** Anonymous, bearer token, or basic auth. Credentials are passed to curl
   through the process environment, so they never show up in `ps`.
 - **Bar pill** with a pigeon glyph and unread count. Follows the theme: accent colour when
@@ -62,7 +64,7 @@ Changes apply live either way.
 | `username` / `password` | `""` | Credentials for `auth = basic` |
 | `toasts` | `true` | Show Omarchy desktop toasts for new messages |
 | `toastMinPriority` | `2` | Lowest ntfy priority (1 to 5) that produces a toast |
-| `backfill` | `12h` | History to load the first time (`12h`, `3d`, `all`, `none`) |
+| `backfill` | `all` | History to load for a new topic: everything the server still caches, or `12h`, `3d`, `none` |
 | `maxMessages` | `200` | Messages kept in the inbox |
 | `allowHttpActions` | `false` | Let publisher-defined `http` actions run (opt-in on purpose) |
 | `showCount` | `true` | Show the unread count next to the bell |
@@ -102,7 +104,7 @@ Panel keys:
 | `u` | Mark all read (current tab) |
 | `m` | Mute or unmute toasts |
 | `s` | Open the settings editor |
-| `r` | Reconnect |
+| `r` | Reload: re-fetch the backfill window from the server |
 | `c` | Compose. Enter sends, Esc closes |
 | `/` | Search. Enter returns to the list, Esc clears |
 | `g` / `G` | First / last message |
@@ -126,6 +128,7 @@ omarchy-shell pigeon clear
 omarchy-shell pigeon mute 3600                           # seconds; -1 = until unmuted
 omarchy-shell pigeon unmute
 omarchy-shell pigeon reconnect
+omarchy-shell pigeon reload                              # re-fetch server history
 omarchy-shell shell toggle xyzlab.pigeon '{}'            # open / close the panel
 ```
 

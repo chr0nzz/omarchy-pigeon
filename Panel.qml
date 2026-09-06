@@ -107,7 +107,7 @@ Panel {
   property bool dShowCount: true
   property bool dShowZero: false
   property string dGlyph: ""
-  property string dBackfill: "12h"
+  property string dBackfill: "all"
   property string dMaxMessages: "200"
 
   readonly property var allMessages: service ? service.messages : []
@@ -307,7 +307,7 @@ Panel {
     dShowCount = asBool(currentSetting("showCount", true), true)
     dShowZero = asBool(currentSetting("showZero", false), false)
     dGlyph = String(currentSetting("glyph", ""))
-    dBackfill = String(currentSetting("backfill", "12h"))
+    dBackfill = String(currentSetting("backfill", "all"))
     dMaxMessages = String(currentSetting("maxMessages", 200))
     sServer.text = dServer
     sTopics.text = dTopics
@@ -385,7 +385,7 @@ Panel {
     entry.showCount = dShowCount
     entry.showZero = dShowZero
     entry.glyph = dGlyph.trim()
-    entry.backfill = dBackfill.trim() || "12h"
+    entry.backfill = dBackfill.trim() || "all"
     entry.maxMessages = Math.min(2000, max)
     root.bar.shell.updateEntryInline(root.moduleName, entry)
     settingsError = false
@@ -499,7 +499,7 @@ Panel {
         case "/": root.toggleSearch(); break
         case "u": root.service.markAllRead(root.topicFilter); break
         case "m": root.service.toggleMute(); break
-        case "r": root.service.reconnect(); break
+        case "r": root.service.reload(); break
         case "o": root.openSelectedClick(); break
         case "a": root.openSelectedAttachment(); break
         case "y": root.copySelected(); break
@@ -609,10 +609,10 @@ Panel {
             }
             PanelActionButton {
               iconText: "󰑓"
-              tooltipText: "Reconnect (r)"
+              tooltipText: "Reload history from the server (r)"
               foreground: root.fg
               fontFamily: root.fontFamily
-              onClicked: if (root.service) root.service.reconnect()
+              onClicked: if (root.service) root.service.reload()
             }
             PanelActionButton {
               iconText: "󰆴"
@@ -825,7 +825,7 @@ Panel {
                 TextField {
                   id: sBackfill
                   width: parent.width
-                  placeholderText: "12h"
+                  placeholderText: "all"
                   foreground: root.fg
                   font.family: root.fontFamily
                   onTextChanged: root.dBackfill = text

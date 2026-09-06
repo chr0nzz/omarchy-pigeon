@@ -106,7 +106,7 @@ function sinceParam(cursorTime, backfill) {
   var c = Number(cursorTime)
   if (isFinite(c) && c > 0) return String(Math.floor(c))
   var b = String(backfill || "").trim()
-  if (!b) return "12h"
+  if (!b) return "all"
   if (b === "none" || b === "0") return ""
   return b
 }

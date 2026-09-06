@@ -84,7 +84,7 @@ Item {
   readonly property string authHeader: Model.authHeader(authMode, setting("token", ""), setting("username", ""), setting("password", ""))
   readonly property bool toastsEnabled: boolSetting("toasts", true)
   readonly property int toastMinPriority: Model.clampPriority(setting("toastMinPriority", 2))
-  readonly property string backfill: String(setting("backfill", "12h"))
+  readonly property string backfill: String(setting("backfill", "all"))
   readonly property int maxMessages: Math.max(20, parseInt(setting("maxMessages", 200), 10) || 200)
   readonly property bool allowHttpActions: boolSetting("allowHttpActions", false)
   readonly property bool configured: server !== "" && topics.length > 0
@@ -98,7 +98,13 @@ Item {
   property var messages: []
   property int unreadCount: 0
   property int urgentUnreadCount: 0
+  // Newest message time seen per topic. A topic without a cursor is new to
+  // us and gets the configured backfill window on the next connect.
+  property var cursors: ({})
   property double cursorTime: 0
+  // Ids deleted locally. They are skipped when the server replays history so
+  // a reload never resurrects what you removed.
+  property var tombstones: ({})
   property double muteUntil: 0        // 0 = off, -1 = until turned off, else ms epoch
   property double nowMs: Date.now()
   readonly property bool muted: muteUntil < 0 || muteUntil > nowMs
@@ -113,7 +119,12 @@ Item {
   property double lastEventAt: 0
   property int backoffMs: 2000
   property int reconnectAttempts: 0
-  property double toastFloor: 0
+  property bool forceBackfill: false
+  // Cursor snapshot taken when the stream starts. History replays in
+  // chronological order, so judging "new" against the live cursor would
+  // promote every backfilled message after the first to a toast.
+  property var streamCursors: ({})
+  property double streamStartedAt: 0
   property int lastHttpCode: 0
   property string lastHttpBody: ""
   property string lastStderr: ""
@@ -210,6 +221,8 @@ Item {
       }
       messages = cleaned.slice(0, maxMessages)
       cursorTime = Number(parsed.cursorTime || 0)
+      cursors = Util.isPlainObject(parsed.cursors) ? parsed.cursors : {}
+      tombstones = Util.isPlainObject(parsed.tombstones) ? parsed.tombstones : {}
       muteUntil = Number(parsed.muteUntil || 0)
       if (muteUntil > 0 && muteUntil < Date.now()) muteUntil = 0
     }
@@ -234,6 +247,8 @@ Item {
       version: 1,
       savedAt: Date.now(),
       cursorTime: cursorTime,
+      cursors: cursors,
+      tombstones: tombstones,
       muteUntil: muteUntil,
       messages: messages.slice(0, maxMessages)
     }
@@ -291,11 +306,24 @@ Item {
       status = "unconfigured"
       return
     }
-    var since = Model.sinceParam(cursorTime, backfill)
-    // Messages older than this are backfill: kept, but never toasted. On a
-    // very first run nothing is unread either — an inbox that opens with
-    // 40 unread rows from last night is noise, not signal.
-    toastFloor = cursorTime > 0 ? cursorTime : Date.now() / 1000
+    // Ask for the configured backfill window when any subscribed topic has
+    // never been seen (or a reload was requested); otherwise resume from the
+    // oldest per-topic cursor. Anything older than a topic's cursor is
+    // history: kept, read, never toasted. Dedupe and tombstones make the
+    // wider window harmless for topics we already know.
+    var oldest = 0
+    var fresh = forceBackfill
+    for (var i = 0; i < topics.length; i++) {
+      var c = Number(cursors[topics[i]] || 0)
+      if (!(c > 0)) { fresh = true; break }
+      if (oldest === 0 || c < oldest) oldest = c
+    }
+    forceBackfill = false
+    var snap = {}
+    for (var t in cursors) snap[t] = cursors[t]
+    streamCursors = snap
+    streamStartedAt = Date.now() / 1000
+    var since = Model.sinceParam(fresh ? 0 : oldest, backfill)
     lastHttpCode = 0
     lastHttpBody = ""
     lastStderr = ""
@@ -383,10 +411,24 @@ Item {
   }
 
   function ingest(raw) {
-    var isNew = Number(raw.time || 0) > toastFloor
+    var id = String(raw.id || "")
+    if (!id || tombstones[id] === true) return
+    var topic = String(raw.topic || "")
+    var cursor = Number(cursors[topic] || 0)
+    var time = Number(raw.time || 0)
+    // Known topic: new means newer than where we left off. Unknown topic:
+    // new means it arrived after this stream opened (history replays first).
+    var snap = Number(streamCursors[topic] || 0)
+    var isNew = snap > 0 ? time > snap : time > streamStartedAt - 5
     var own = isOwnMessage(raw)
     var msg = Model.normalizeMessage(raw, isNew && !own)
     if (!msg) return
+    if (time > cursor) {
+      var next = {}
+      for (var k in cursors) next[k] = cursors[k]
+      next[topic] = time
+      cursors = next
+    }
     if (Model.hasMessage(messages, msg.id)) return
     messages = Model.mergeMessage(messages, msg, maxMessages)
     if (msg.time > cursorTime) cursorTime = msg.time
@@ -451,20 +493,45 @@ Item {
     scheduleSave()
   }
 
+  function bury(ids) {
+    var next = {}
+    var keys = Object.keys(tombstones)
+    // Keep the newest thousand; older ones have long expired on the server.
+    var start = Math.max(0, keys.length + ids.length - 1000)
+    for (var i = start; i < keys.length; i++) next[keys[i]] = true
+    for (var j = 0; j < ids.length; j++) next[ids[j]] = true
+    tombstones = next
+  }
+
   function remove(id) {
     var next = messages.filter(function(m) { return m && m.id !== id })
     if (next.length === messages.length) return
+    bury([id])
     messages = next
     recount()
     scheduleSave()
   }
 
   function clear(topic) {
-    var next = topic ? messages.filter(function(m) { return m && m.topic !== topic }) : []
+    var gone = []
+    var next = messages.filter(function(m) {
+      var keep = m && topic && m.topic !== topic
+      if (!keep && m) gone.push(m.id)
+      return keep
+    })
     if (next.length === messages.length) return
+    bury(gone)
     messages = next
     recount()
     scheduleSave()
+  }
+
+  // Re-fetch the backfill window from the server. Known messages are
+  // deduped, deleted ones stay deleted, and nothing old is toasted.
+  function reload() {
+    lastError = ""
+    forceBackfill = true
+    restartStream()
   }
 
   // seconds > 0 mutes for that long, -1 mutes until turned off, 0 unmutes.
@@ -666,6 +733,7 @@ Item {
   //   omarchy-shell pigeon clear
   //   omarchy-shell pigeon mute <seconds|-1|0>
   //   omarchy-shell pigeon reconnect
+  //   omarchy-shell pigeon reload          re-fetch server history (backfill window)
   IpcHandler {
     target: "pigeon"
 
@@ -690,6 +758,7 @@ Item {
     function markAllRead(): void { root.markAllRead("") }
     function clear(): void { root.clear("") }
     function reconnect(): void { root.reconnect() }
+    function reload(): void { root.reload() }
     function mute(seconds: string): void { root.setMute(parseInt(seconds, 10)) }
     function unmute(): void { root.setMute(0) }
   }
