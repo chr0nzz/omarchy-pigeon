@@ -38,6 +38,15 @@ omarchy bar move xyzlab.pigeon --section left --index 2
 
 Pigeon has no default topic. Pick a name that is hard to guess, an unprotected topic is a public address.
 
+## Uninstall
+
+```bash
+omarchy plugin remove xyzlab.pigeon
+rm -r ~/.local/state/omarchy/pigeon
+```
+
+The first line removes the widget and its settings from `shell.json`. The second removes the saved inbox.
+
 ## Settings
 
 Press `s` or the gear in the panel to open the settings editor. Enter saves, Esc cancels, Tab moves
