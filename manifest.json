@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "xyzlab.pigeon",
+  "name": "Pigeon",
+  "version": "1.0.0",
+  "author": "xyzlab",
+  "license": "MIT",
+  "description": "ntfy inbox for the Omarchy bar. Live push notifications from ntfy.sh or a self-hosted server, with toasts, actions, attachments, and a compose box.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Pigeon",
+    "description": "ntfy inbox with unread badge, toasts, click actions, attachments and a compose box.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "server": "https://ntfy.sh",
+      "topics": "",
+      "auth": "none",
+      "token": "",
+      "username": "",
+      "password": "",
+      "toasts": true,
+      "toastMinPriority": 2,
+      "backfill": "12h",
+      "maxMessages": 200,
+      "allowHttpActions": false,
+      "showCount": true,
+      "showZero": false,
+      "glyph": ""
+    },
+    "schema": [
+      { "key": "server", "type": "string", "label": "Server URL", "defaultValue": "https://ntfy.sh" },
+      { "key": "topics", "type": "string", "label": "Topics (comma separated)", "defaultValue": "" },
+      { "key": "auth", "type": "string", "label": "Auth mode: none, token or basic", "defaultValue": "none" },
+      { "key": "token", "type": "string", "label": "Access token (auth = token)", "defaultValue": "" },
+      { "key": "username", "type": "string", "label": "Username (auth = basic)", "defaultValue": "" },
+      { "key": "password", "type": "string", "label": "Password (auth = basic)", "defaultValue": "" },
+      { "key": "toasts", "type": "boolean", "label": "Desktop toasts for new messages", "defaultValue": true },
+      { "key": "toastMinPriority", "type": "integer", "label": "Minimum priority that toasts (1-5)", "min": 1, "max": 5, "step": 1, "defaultValue": 2 },
+      { "key": "backfill", "type": "string", "label": "History to load on first connect (e.g. 12h, 3d, all)", "defaultValue": "12h" },
+      { "key": "maxMessages", "type": "integer", "label": "Messages kept in the inbox", "min": 20, "max": 2000, "step": 10, "defaultValue": 200 },
+      { "key": "allowHttpActions", "type": "boolean", "label": "Allow publisher-defined HTTP actions", "defaultValue": false },
+      { "key": "showCount", "type": "boolean", "label": "Show unread count next to the icon", "defaultValue": true },
+      { "key": "showZero", "type": "boolean", "label": "Show the count even when it is zero", "defaultValue": false },
+      { "key": "glyph", "type": "string", "label": "Custom bar glyph (leave empty for the bell)", "defaultValue": "" }
+    ]
+  }
+}
