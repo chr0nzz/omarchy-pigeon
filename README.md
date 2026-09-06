@@ -12,7 +12,7 @@ Omarchy toast plus an entry in a themed popup inbox.
   backoff, a keepalive watchdog, and catch-up of anything missed while the laptop slept.
 - **Self-hosted first.** Anonymous, bearer token, or basic auth. Credentials are passed to curl
   through the process environment, so they never show up in `ps`.
-- **Bar pill** with a bell glyph and unread count. Follows the theme: accent colour when
+- **Bar pill** with a pigeon glyph and unread count. Follows the theme: accent colour when
   something is unread, the theme's "active" colour when a high or urgent message is waiting,
   dimmed when disconnected. Works in the left, center, or right section and on vertical bars.
 - **Native Omarchy toasts** with the message's emoji tag as glyph, ntfy priority mapped to
@@ -47,8 +47,11 @@ Pigeon has no default topic on purpose: an unprotected topic name is a public ad
 
 ## Settings
 
-Every setting lives inline on the widget entry in `~/.config/omarchy/shell.json` and can be set
-with `omarchy bar set xyzlab.pigeon <key> <value>`. Changes apply live.
+Press `s` (or the gear) in the panel to open the settings editor: server, topics, auth,
+toasts, bar options, and inbox limits, with Save and Cancel. Enter saves, Esc cancels, Tab
+moves between fields. Everything it writes lands inline on the widget entry in
+`~/.config/omarchy/shell.json`, so the CLI form below edits exactly the same values.
+Changes apply live either way.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -64,7 +67,7 @@ with `omarchy bar set xyzlab.pigeon <key> <value>`. Changes apply live.
 | `allowHttpActions` | `false` | Let publisher-defined `http` actions run (opt-in on purpose) |
 | `showCount` | `true` | Show the unread count next to the bell |
 | `showZero` | `false` | Show the count even when it is zero |
-| `glyph` | `""` | Replace the bell with your own glyph |
+| `glyph` | `""` | Replace the pigeon with your own glyph |
 
 Example with a token on a self-hosted server:
 
@@ -98,6 +101,7 @@ Panel keys:
 | `D` | Clear the inbox (or the current topic tab), with confirmation |
 | `u` | Mark all read (current tab) |
 | `m` | Mute or unmute toasts |
+| `s` | Open the settings editor |
 | `r` | Reconnect |
 | `c` | Compose. Enter sends, Esc closes |
 | `/` | Search. Enter returns to the list, Esc clears |
@@ -105,7 +109,8 @@ Panel keys:
 | Tab / Shift-Tab | Switch to the neighbouring bar panel |
 | Esc | Close |
 
-A global shortcut is one line in `~/.config/hypr/bindings.lua`:
+A global shortcut is one line in `~/.config/hypr/bindings.lua` (Omarchy leaves `SUPER + N`
+free):
 
 ```lua
 o.bind("SUPER + N", "Pigeon inbox", "omarchy-shell shell toggle xyzlab.pigeon '{}'")

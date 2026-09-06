@@ -4,7 +4,7 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Bar pill: bell glyph plus unread count. One copy exists per monitor; all
+// Bar pill: pigeon glyph plus unread count. One copy exists per monitor; all
 // of them read from the single Pigeon service the shell hosts.
 BarWidget {
   id: root
@@ -20,13 +20,9 @@ BarWidget {
   readonly property bool showZero: boolSetting("showZero", false)
   readonly property string customGlyph: String(setting("glyph", "") || "").trim()
 
-  readonly property string glyph: {
-    if (customGlyph) return customGlyph
-    if (muted) return "󰂛"
-    if (urgent > 0) return "󱅫"
-    if (unread > 0) return "󰂞"
-    return "󰂚"
-  }
+  // The pigeon (nf-md-bird). State is carried by colour, the count, and
+  // dimming, so the glyph itself stays put.
+  readonly property string glyph: customGlyph || "󱗆"
   readonly property string countText: unread > 99 ? "99+" : String(unread)
   readonly property bool countVisible: !vertical && showCount && (unread > 0 || showZero)
   readonly property color glyphColor: {
@@ -108,7 +104,7 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    dimmed: !root.connected && !root.muted && root.unread === 0
+    dimmed: root.muted || (!root.connected && root.unread === 0)
     tooltipText: root.tooltip
     horizontalMargin: root.countVisible ? 6 : 0
     fixedWidth: root.vertical ? -1 : (root.countVisible ? content.implicitWidth + Style.spaceReal(12) : Style.bar.iconSlot)

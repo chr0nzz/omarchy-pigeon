@@ -43,11 +43,14 @@ Panel {
     cursorActive = openedFromHotkey && rows.length > 0
     selectedIndex = 0
     confirmOpen = false
+    settingsOpen = false
+    settingsStatus = ""
   }
 
   function close() {
     setCenterHoverRevealSuppressed(false)
     confirmOpen = false
+    settingsOpen = false
     root.controller.hide()
   }
 
@@ -87,6 +90,26 @@ Panel {
   property double nowMs: Date.now()
   property int composePriority: 3
 
+  // Settings editor. Draft values live here until Save writes them to the
+  // widget's shell.json entry through the shell; Cancel just drops them.
+  property bool settingsOpen: false
+  property string settingsStatus: ""
+  property bool settingsError: false
+  property string dServer: ""
+  property string dTopics: ""
+  property string dAuth: "none"
+  property string dToken: ""
+  property string dUser: ""
+  property string dPass: ""
+  property bool dToasts: true
+  property int dMinPriority: 2
+  property bool dAllowHttp: false
+  property bool dShowCount: true
+  property bool dShowZero: false
+  property string dGlyph: ""
+  property string dBackfill: "12h"
+  property string dMaxMessages: "200"
+
   readonly property var allMessages: service ? service.messages : []
   readonly property var rows: Model.filterMessages(allMessages, topicFilter, query)
   readonly property var topicTabs: buildTopicTabs(allMessages, service ? service.topics : [])
@@ -95,6 +118,7 @@ Panel {
   readonly property bool connected: service ? service.status === "connected" : false
   readonly property bool muted: service ? service.muted : false
   readonly property int unread: service ? service.unreadCount : 0
+  readonly property bool settingsFieldFocused: sServer.activeFocus || sTopics.activeFocus || sToken.activeFocus || sUser.activeFocus || sPass.activeFocus || sGlyph.activeFocus || sBackfill.activeFocus || sMax.activeFocus
   readonly property string editorFocusBlock: searchField.activeFocus || topicField.activeFocus || titleField.activeFocus || messageField.activeFocus ? "yes" : ""
 
   readonly property string statusCaps: {
@@ -113,7 +137,7 @@ Panel {
     return parts.join(" · ").toUpperCase()
   }
 
-  readonly property string heroGlyph: muted ? "󰂛" : (service && service.urgentUnreadCount > 0 ? "󱅫" : (unread > 0 ? "󰂞" : "󰂚"))
+  readonly property string heroGlyph: "󱗆"
 
   function buildTopicTabs(messages, configuredTopics) {
     var order = []
@@ -250,6 +274,141 @@ Panel {
     composePriority = composePriority >= 5 ? 1 : composePriority + 1
   }
 
+  // ------------------------------------------------------------ settings
+  function currentSetting(name, fallback) {
+    var v = settings ? settings[name] : undefined
+    if (v === undefined || v === null) {
+      var d = service && service.defaults ? service.defaults[name] : undefined
+      return d === undefined || d === null ? fallback : d
+    }
+    return v
+  }
+
+  function asBool(v, fallback) {
+    if (typeof v === "boolean") return v
+    var t = String(v).toLowerCase()
+    if (t === "true" || t === "1" || t === "yes" || t === "on") return true
+    if (t === "false" || t === "0" || t === "no" || t === "off") return false
+    return fallback
+  }
+
+  function loadDraft() {
+    dServer = String(currentSetting("server", "https://ntfy.sh"))
+    var topics = currentSetting("topics", "")
+    dTopics = typeof topics === "string" ? topics : Model.parseTopics(topics).join(",")
+    var auth = String(currentSetting("auth", "none")).toLowerCase()
+    dAuth = auth === "token" || auth === "basic" ? auth : "none"
+    dToken = String(currentSetting("token", ""))
+    dUser = String(currentSetting("username", ""))
+    dPass = String(currentSetting("password", ""))
+    dToasts = asBool(currentSetting("toasts", true), true)
+    dMinPriority = Model.clampPriority(currentSetting("toastMinPriority", 2))
+    dAllowHttp = asBool(currentSetting("allowHttpActions", false), false)
+    dShowCount = asBool(currentSetting("showCount", true), true)
+    dShowZero = asBool(currentSetting("showZero", false), false)
+    dGlyph = String(currentSetting("glyph", ""))
+    dBackfill = String(currentSetting("backfill", "12h"))
+    dMaxMessages = String(currentSetting("maxMessages", 200))
+    sServer.text = dServer
+    sTopics.text = dTopics
+    sToken.text = dToken
+    sUser.text = dUser
+    sPass.text = dPass
+    sGlyph.text = dGlyph
+    sBackfill.text = dBackfill
+    sMax.text = dMaxMessages
+  }
+
+  function openSettings() {
+    settingsStatus = ""
+    settingsError = false
+    loadDraft()
+    composeOpen = false
+    searchOpen = false
+    confirmOpen = false
+    settingsOpen = true
+    settingsFocusTimer.restart()
+  }
+
+  // The key press that opened the editor must finish propagating before a
+  // field takes focus, or the "s" itself lands in the server URL.
+  Timer {
+    id: settingsFocusTimer
+    interval: 60
+    onTriggered: {
+      if (!root.settingsOpen) return
+      sServer.forceActiveFocus()
+      sServer.cursorPosition = sServer.text.length
+    }
+  }
+
+  function closeSettings() {
+    settingsOpen = false
+    settingsStatus = ""
+    refocusPanel()
+  }
+
+  function toggleSettings() {
+    if (settingsOpen) closeSettings()
+    else openSettings()
+  }
+
+  function failSettings(text) {
+    settingsError = true
+    settingsStatus = text
+    return false
+  }
+
+  function saveSettings() {
+    var server = Model.normalizeServer(dServer)
+    if (!server) return failSettings("Server URL is required")
+    var topics = Model.parseTopics(dTopics)
+    if (dTopics.trim() !== "" && topics.length === 0) return failSettings("Topic names may only use letters, digits, - and _")
+    if (dAuth === "token" && dToken.trim() === "") return failSettings("Token auth needs an access token")
+    if (dAuth === "basic" && dUser.trim() === "") return failSettings("Basic auth needs a username")
+    var max = parseInt(dMaxMessages, 10)
+    if (!isFinite(max) || max < 20) return failSettings("Keep at least 20 messages")
+    if (!root.bar || !root.bar.shell || typeof root.bar.shell.updateEntryInline !== "function")
+      return failSettings("Shell refused the update")
+
+    var entry = {}
+    for (var k in settings) if (k !== "id") entry[k] = settings[k]
+    entry.server = server
+    entry.topics = topics.join(",")
+    entry.auth = dAuth
+    entry.token = dAuth === "token" ? dToken.trim() : ""
+    entry.username = dAuth === "basic" ? dUser.trim() : ""
+    entry.password = dAuth === "basic" ? dPass : ""
+    entry.toasts = dToasts
+    entry.toastMinPriority = dMinPriority
+    entry.allowHttpActions = dAllowHttp
+    entry.showCount = dShowCount
+    entry.showZero = dShowZero
+    entry.glyph = dGlyph.trim()
+    entry.backfill = dBackfill.trim() || "12h"
+    entry.maxMessages = Math.min(2000, max)
+    root.bar.shell.updateEntryInline(root.moduleName, entry)
+    settingsError = false
+    settingsStatus = "Saved"
+    settingsOpen = false
+    refocusPanel()
+    return true
+  }
+
+  function cycleMinPriority() {
+    dMinPriority = dMinPriority >= 5 ? 1 : dMinPriority + 1
+  }
+
+  function handleSettingsKey(event) {
+    if (event.key === Qt.Key_Escape) {
+      closeSettings()
+      event.accepted = true
+    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+      saveSettings()
+      event.accepted = true
+    }
+  }
+
   function priorityCaption(p) {
     return ["", "min", "low", "default", "high", "urgent"][Model.clampPriority(p)]
   }
@@ -297,13 +456,14 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.editorFocusBlock !== ""
+      blocked: root.editorFocusBlock !== "" || (root.settingsOpen && (settingsScope.activeFocus || root.settingsFieldFocused))
 
       onMoveRequested: function(dx, dy) {
         if (root.confirmOpen) {
           if (dx !== 0) root.confirmIndex = root.confirmIndex === 0 ? 1 : 0
           return
         }
+        if (root.settingsOpen) return
         if (dy !== 0) root.moveCursor(dy)
         else if (dx !== 0) root.moveTopic(dx)
       }
@@ -313,20 +473,28 @@ Panel {
           else root.confirmOpen = false
           return
         }
+        if (root.settingsOpen) return
         root.activateCursor()
       }
       onCloseRequested: {
         if (root.confirmOpen) { root.confirmOpen = false; return }
+        if (root.settingsOpen) { root.closeSettings(); return }
         if (root.composeOpen) { root.toggleCompose(); return }
         if (root.searchOpen) { root.toggleSearch(); return }
         root.close()
       }
       onDeleteRequested: if (!root.confirmOpen) root.deleteSelected()
-      onTabRequested: function(direction) { if (!root.confirmOpen) root.switchPanel(direction) }
+      onTabRequested: function(direction) {
+        if (root.confirmOpen) return
+        if (root.settingsOpen) { sServer.forceActiveFocus(); return }
+        root.switchPanel(direction)
+      }
       onTextKey: function(t) {
         if (root.confirmOpen) return
+        if (root.settingsOpen) { if (t === "s") root.closeSettings(); return }
         if (!root.service) return
         switch (t) {
+        case "s": root.openSettings(); break
         case "c": root.toggleCompose(); break
         case "/": root.toggleSearch(); break
         case "u": root.service.markAllRead(root.topicFilter); break
@@ -455,12 +623,286 @@ Panel {
               fontFamily: root.fontFamily
               onClicked: root.requestClear()
             }
+            PanelActionButton {
+              iconText: "󰒓"
+              tooltipText: root.settingsOpen ? "Back to inbox (s)" : "Settings (s)"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              hasCursor: root.settingsOpen
+              onClicked: root.toggleSettings()
+            }
+          }
+        }
+
+        // ---------- Settings editor ----------
+        FocusScope {
+          id: settingsScope
+          visible: root.settingsOpen
+          width: parent.width
+          implicitHeight: settingsColumn.implicitHeight
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) { root.closeSettings(); event.accepted = true }
+          }
+
+          component FieldLabel: Text {
+            textFormat: Text.PlainText
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          component SettingsToggle: Toggle {
+            width: parent.width
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            titleSize: Style.font.body
+          }
+
+          Column {
+            id: settingsColumn
+            width: parent.width
+            spacing: Style.space(8)
+
+            PanelSeparator { foreground: root.fg }
+
+            PanelSectionHeader { text: "SERVER"; foreground: root.fg; fontFamily: root.fontFamily }
+
+            FieldLabel { text: "Server URL" }
+            TextField {
+              id: sServer
+              width: parent.width
+              placeholderText: "https://ntfy.example.com"
+              foreground: root.fg
+              font.family: root.fontFamily
+              onTextChanged: root.dServer = text
+              Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+            }
+
+            FieldLabel { text: "Topics (comma separated)" }
+            TextField {
+              id: sTopics
+              width: parent.width
+              placeholderText: "alerts,home,backups"
+              foreground: root.fg
+              font.family: root.fontFamily
+              onTextChanged: root.dTopics = text
+              Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+            }
+
+            FieldLabel { text: "Authentication" }
+            Row {
+              spacing: Style.space(4)
+              Repeater {
+                model: [{ v: "none", l: "None" }, { v: "token", l: "Access token" }, { v: "basic", l: "Username + password" }]
+                Button {
+                  required property var modelData
+                  text: modelData.l
+                  selected: root.dAuth === modelData.v
+                  bordered: true
+                  focusable: true
+                  foreground: root.fg
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  onClicked: root.dAuth = modelData.v
+                }
+              }
+            }
+
+            FieldLabel { visible: root.dAuth === "token"; text: "Access token" }
+            TextField {
+              id: sToken
+              visible: root.dAuth === "token"
+              width: parent.width
+              placeholderText: "tk_…"
+              password: true
+              foreground: root.fg
+              font.family: root.fontFamily
+              onTextChanged: root.dToken = text
+              Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+            }
+
+            Row {
+              visible: root.dAuth === "basic"
+              width: parent.width
+              spacing: Style.space(6)
+              Column {
+                width: (parent.width - Style.space(6)) / 2
+                spacing: Style.space(4)
+                FieldLabel { text: "Username" }
+                TextField {
+                  id: sUser
+                  width: parent.width
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  onTextChanged: root.dUser = text
+                  Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+                }
+              }
+              Column {
+                width: (parent.width - Style.space(6)) / 2
+                spacing: Style.space(4)
+                FieldLabel { text: "Password" }
+                TextField {
+                  id: sPass
+                  width: parent.width
+                  password: true
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  onTextChanged: root.dPass = text
+                  Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+                }
+              }
+            }
+
+            PanelSectionHeader { text: "NOTIFICATIONS"; foreground: root.fg; fontFamily: root.fontFamily; topPadding: Style.space(6) }
+
+            SettingsToggle {
+              label: "Desktop toasts"
+              description: "Show an Omarchy toast for every new message"
+              checked: root.dToasts
+              onClicked: root.dToasts = !root.dToasts
+            }
+
+            Button {
+              iconText: Model.priorityGlyph(root.dMinPriority)
+              text: "Toast from priority " + root.dMinPriority + " (" + root.priorityCaption(root.dMinPriority) + ") and up"
+              enabled: root.dToasts
+              bordered: true
+              focusable: true
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              tooltipText: "Click to cycle 1–5"
+              onClicked: root.cycleMinPriority()
+            }
+
+            SettingsToggle {
+              label: "Allow HTTP actions"
+              description: "Let publishers attach buttons that send HTTP requests from this machine"
+              checked: root.dAllowHttp
+              onClicked: root.dAllowHttp = !root.dAllowHttp
+            }
+
+            PanelSectionHeader { text: "BAR"; foreground: root.fg; fontFamily: root.fontFamily; topPadding: Style.space(6) }
+
+            SettingsToggle {
+              label: "Show unread count"
+              checked: root.dShowCount
+              onClicked: root.dShowCount = !root.dShowCount
+            }
+
+            SettingsToggle {
+              label: "Show the count when it is zero"
+              enabled: root.dShowCount
+              opacity: root.dShowCount ? 1 : 0.5
+              checked: root.dShowZero
+              onClicked: root.dShowZero = !root.dShowZero
+            }
+
+            Row {
+              id: bottomFields
+              width: parent.width
+              spacing: Style.space(6)
+              readonly property real colWidth: (width - spacing * 2) / 3
+              Column {
+                width: bottomFields.colWidth
+                spacing: Style.space(4)
+                FieldLabel { text: "Bar glyph" }
+                TextField {
+                  id: sGlyph
+                  width: parent.width
+                  placeholderText: "󱗆"
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  onTextChanged: root.dGlyph = text
+                  Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+                }
+              }
+              Column {
+                width: bottomFields.colWidth
+                spacing: Style.space(4)
+                FieldLabel { text: "Backfill on first run" }
+                TextField {
+                  id: sBackfill
+                  width: parent.width
+                  placeholderText: "12h"
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  onTextChanged: root.dBackfill = text
+                  Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+                }
+              }
+              Column {
+                width: bottomFields.colWidth
+                spacing: Style.space(4)
+                FieldLabel { text: "Messages kept" }
+                TextField {
+                  id: sMax
+                  width: parent.width
+                  placeholderText: "200"
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  onTextChanged: root.dMaxMessages = text
+                  Keys.onPressed: function(event) { root.handleSettingsKey(event) }
+                }
+              }
+            }
+
+            PanelSeparator { foreground: root.fg }
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(settingsButtons.implicitHeight, settingsStatusText.implicitHeight)
+
+              Row {
+                id: settingsButtons
+                spacing: Style.space(6)
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+
+                Button {
+                  iconText: "󰆓"
+                  text: "Save"
+                  bordered: true
+                  focusable: true
+                  foreground: root.fg
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  tooltipText: "Enter"
+                  onClicked: root.saveSettings()
+                }
+                Button {
+                  text: "Cancel"
+                  bordered: true
+                  focusable: true
+                  foreground: root.fg
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  tooltipText: "Esc"
+                  onClicked: root.closeSettings()
+                }
+              }
+
+              Text {
+                id: settingsStatusText
+                textFormat: Text.PlainText
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(0, parent.width - settingsButtons.implicitWidth - Style.space(10))
+                horizontalAlignment: Text.AlignRight
+                wrapMode: Text.Wrap
+                text: root.settingsStatus || "Saved to shell.json · Tab moves between fields"
+                color: root.settingsError ? root.urgentColor : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+            }
           }
         }
 
         // ---------- Setup hint when nothing is configured ----------
         Column {
-          visible: !root.configured
+          visible: !root.configured && !root.settingsOpen
           width: parent.width
           spacing: Style.space(6)
 
@@ -480,9 +922,7 @@ Panel {
           Text {
             width: parent.width
             wrapMode: Text.Wrap
-            text: root.service && root.service.authIncomplete
-              ? "omarchy bar set xyzlab.pigeon token tk_…\nomarchy bar set xyzlab.pigeon auth none"
-              : "omarchy bar set xyzlab.pigeon server https://ntfy.example.com\nomarchy bar set xyzlab.pigeon topics alerts,home"
+            text: "Press s or the gear to open settings, or from a terminal:\nomarchy bar set xyzlab.pigeon server https://ntfy.example.com\nomarchy bar set xyzlab.pigeon topics alerts,home"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -491,7 +931,7 @@ Panel {
 
         // ---------- Error detail ----------
         Text {
-          visible: root.configured && root.service && root.service.status === "error" && root.service.lastError !== ""
+          visible: !root.settingsOpen && root.configured && root.service && root.service.status === "error" && root.service.lastError !== ""
           width: parent.width
           wrapMode: Text.Wrap
           text: root.service ? root.service.lastError : ""
@@ -501,13 +941,13 @@ Panel {
         }
 
         PanelSeparator {
-          visible: root.showTabs || root.searchOpen || root.composeOpen || root.rows.length > 0
+          visible: !root.settingsOpen && (root.showTabs || root.searchOpen || root.composeOpen || root.rows.length > 0)
           foreground: root.fg
         }
 
         // ---------- Topic tabs ----------
         Flow {
-          visible: root.showTabs
+          visible: root.showTabs && !root.settingsOpen
           width: parent.width
           spacing: Style.space(4)
 
@@ -530,7 +970,7 @@ Panel {
         // ---------- Search ----------
         TextField {
           id: searchField
-          visible: root.searchOpen
+          visible: root.searchOpen && !root.settingsOpen
           width: parent.width
           placeholderText: "Filter messages"
           foreground: root.fg
@@ -541,7 +981,7 @@ Panel {
 
         // ---------- Compose ----------
         Column {
-          visible: root.composeOpen
+          visible: root.composeOpen && !root.settingsOpen
           width: parent.width
           spacing: Style.space(6)
 
@@ -639,7 +1079,7 @@ Panel {
           id: list
           width: parent.width
           height: Math.min(contentHeight, Style.space(460))
-          visible: root.rows.length > 0
+          visible: root.rows.length > 0 && !root.settingsOpen
           spacing: Style.space(4)
           clip: true
           boundsBehavior: Flickable.StopAtBounds
@@ -678,7 +1118,7 @@ Panel {
 
         // ---------- Empty state ----------
         Text {
-          visible: root.rows.length === 0 && root.configured
+          visible: root.rows.length === 0 && root.configured && !root.settingsOpen
           width: parent.width
           wrapMode: Text.Wrap
           text: root.query !== ""
@@ -692,10 +1132,10 @@ Panel {
 
         // ---------- Key hints ----------
         Text {
-          visible: root.rows.length > 0 && !root.composeOpen
+          visible: root.rows.length > 0 && !root.composeOpen && !root.settingsOpen
           width: parent.width
           textFormat: Text.PlainText
-          text: "j/k move · ⏎ expand · o link · a file · d delete · u read all · c compose · / search"
+          text: "j/k move · ⏎ expand · o link · d delete · u read all · c compose · / search · s settings"
           color: Qt.darker(root.fg, 1.8)
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption

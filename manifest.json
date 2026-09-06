@@ -48,7 +48,7 @@
       { "key": "allowHttpActions", "type": "boolean", "label": "Allow publisher-defined HTTP actions", "defaultValue": false },
       { "key": "showCount", "type": "boolean", "label": "Show unread count next to the icon", "defaultValue": true },
       { "key": "showZero", "type": "boolean", "label": "Show the count even when it is zero", "defaultValue": false },
-      { "key": "glyph", "type": "string", "label": "Custom bar glyph (leave empty for the bell)", "defaultValue": "" }
+      { "key": "glyph", "type": "string", "label": "Custom bar glyph (leave empty for the pigeon)", "defaultValue": "" }
     ]
   }
 }
