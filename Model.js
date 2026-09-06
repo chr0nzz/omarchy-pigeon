@@ -317,3 +317,46 @@ function describeHttpError(code, body) {
   if (c > 0) return "HTTP " + c + (hint ? ": " + hint : "")
   return hint || "Connection failed"
 }
+
+function fitWidths(naturals, available, gap) {
+  var n = naturals.length
+  if (!n) return []
+  var room = Math.max(0, available - gap * (n - 1))
+  var total = 0
+  for (var i = 0; i < n; i++) total += naturals[i]
+  if (total <= room) return naturals.slice()
+  var out = naturals.slice()
+  var fixed = {}
+  var fixedCount = 0
+  var fixedSum = 0
+  var changed = true
+  while (changed && fixedCount < n) {
+    changed = false
+    var share = (room - fixedSum) / (n - fixedCount)
+    for (var j = 0; j < n; j++) {
+      if (fixed[j] || naturals[j] > share) continue
+      fixed[j] = true
+      fixedCount++
+      fixedSum += naturals[j]
+      changed = true
+    }
+  }
+  var rest = fixedCount < n ? (room - fixedSum) / (n - fixedCount) : 0
+  for (var k = 0; k < n; k++) if (!fixed[k]) out[k] = Math.floor(rest)
+  return out
+}
+
+function fitLabel(label, suffix, naturalWidth, assignedWidth, chrome) {
+  var name = String(label || "")
+  var tail = String(suffix || "")
+  if (!(naturalWidth > 0) || assignedWidth >= naturalWidth) return name + tail
+  var textWidth = Math.max(1, naturalWidth - chrome)
+  var budget = Math.floor((name.length + tail.length) * Math.max(0, assignedWidth - chrome) / textWidth) - 1
+  var keep = budget - tail.length
+  if (keep < 2) {
+    tail = ""
+    keep = budget
+  }
+  keep = Math.max(1, Math.min(name.length - 1, keep))
+  return name.slice(0, keep) + "…" + tail
+}

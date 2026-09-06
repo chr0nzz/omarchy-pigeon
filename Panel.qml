@@ -153,7 +153,7 @@ Panel {
       if (t && !seen[t]) { seen[t] = true; order.push(t) }
     }
     var tabs = [{ topic: "", label: "All", unread: Model.countUnread(messages, "").unread }]
-    for (var k = 0; k < order.length; k++) tabs.push({ topic: order[k], label: "#" + order[k], unread: Model.countUnread(messages, order[k]).unread })
+    for (var k = 0; k < order.length; k++) tabs.push({ topic: order[k], label: order[k], unread: Model.countUnread(messages, order[k]).unread })
     return tabs
   }
 
@@ -939,49 +939,72 @@ Panel {
           foreground: root.fg
         }
 
-        Flickable {
+        Item {
           id: tabStrip
           visible: root.showTabs && !root.settingsOpen
           width: parent.width
           height: tabRow.implicitHeight
-          contentWidth: tabRow.implicitWidth
-          contentHeight: height
-          clip: true
-          flickableDirection: Flickable.HorizontalFlick
-          boundsBehavior: Flickable.StopAtBounds
-          interactive: contentWidth > width
+          readonly property int gap: Style.space(4)
+          readonly property int pad: Style.space(6)
+          property var fit: []
 
-          function reveal(x, w) {
-            if (contentWidth <= width) return
-            if (x < contentX) contentX = x
-            else if (x + w > contentX + width) contentX = Math.min(contentWidth - width, x + w - width)
-          }
+          function scheduleFit() { Qt.callLater(refit) }
 
-          WheelHandler {
-            onWheel: function(event) {
-              var delta = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
-              tabStrip.contentX = Math.max(0, Math.min(tabStrip.contentWidth - tabStrip.width, tabStrip.contentX - delta))
+          function refit() {
+            var naturals = []
+            for (var i = 0; i < tabRepeater.count; i++) {
+              var item = tabRepeater.itemAt(i)
+              naturals.push(item ? item.naturalWidth : 0)
             }
+            fit = Model.fitWidths(naturals, width, gap)
           }
+
+          onWidthChanged: scheduleFit()
 
           Row {
             id: tabRow
-            spacing: Style.space(4)
+            spacing: tabStrip.gap
 
             Repeater {
+              id: tabRepeater
               model: root.topicTabs
-              Button {
+              onItemAdded: tabStrip.scheduleFit()
+              onItemRemoved: tabStrip.scheduleFit()
+
+              Item {
+                id: tabItem
                 required property var modelData
-                text: modelData.label + (modelData.unread > 0 ? "  " + modelData.unread : "")
-                selected: root.topicFilter === modelData.topic
-                foreground: root.fg
-                fontFamily: root.fontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.space(8)
-                verticalPadding: Style.space(3)
-                onClicked: root.topicFilter = modelData.topic
-                onSelectedChanged: if (selected) Qt.callLater(function() { tabStrip.reveal(x, width) })
-                Component.onCompleted: if (selected) Qt.callLater(function() { tabStrip.reveal(x, width) })
+                required property int index
+                readonly property string suffix: modelData.unread > 0 ? "  " + modelData.unread : ""
+                readonly property string fullLabel: modelData.label + suffix
+                readonly property real naturalWidth: probe.implicitWidth
+                readonly property real assigned: tabStrip.fit[index] > 0 ? tabStrip.fit[index] : naturalWidth
+                width: assigned
+                height: tab.implicitHeight
+                onNaturalWidthChanged: tabStrip.scheduleFit()
+
+                Button {
+                  id: probe
+                  visible: false
+                  text: tabItem.fullLabel
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  horizontalPadding: tabStrip.pad
+                  verticalPadding: Style.space(3)
+                }
+
+                Button {
+                  id: tab
+                  width: tabItem.assigned
+                  text: Model.fitLabel(tabItem.modelData.label, tabItem.suffix, tabItem.naturalWidth, tabItem.assigned, tabStrip.pad * 2)
+                  selected: root.topicFilter === tabItem.modelData.topic
+                  foreground: root.fg
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  horizontalPadding: tabStrip.pad
+                  verticalPadding: Style.space(3)
+                  onClicked: root.topicFilter = tabItem.modelData.topic
+                }
               }
             }
           }
