@@ -36,6 +36,7 @@ Panel {
 
   function onOpened() {
     nowMs = Date.now()
+    statusIndex = 0
     cursorActive = openedFromHotkey && rows.length > 0
     selectedIndex = 0
     confirmOpen = false
@@ -113,8 +114,8 @@ Panel {
   readonly property bool settingsFieldFocused: sServer.activeFocus || sTopics.activeFocus || sToken.activeFocus || sUser.activeFocus || sPass.activeFocus || sGlyph.activeFocus || sBackfill.activeFocus || sMax.activeFocus
   readonly property string editorFocusBlock: searchField.activeFocus || topicField.activeFocus || titleField.activeFocus || messageField.activeFocus ? "yes" : ""
 
-  readonly property string statusCaps: {
-    if (!service) return "LOADING"
+  readonly property var statusParts: {
+    if (!service) return ["Loading"]
     var parts = []
     if (!service.configured) parts.push(service.statusLine)
     else if (service.authIncomplete) parts.push(service.statusLine)
@@ -126,7 +127,17 @@ Panel {
       }
     }
     if (muted) parts.push(Model.muteLabel(service.muteUntil, nowMs))
-    return parts.join(" · ").toUpperCase()
+    return parts
+  }
+  property int statusIndex: 0
+  onStatusPartsChanged: if (statusIndex >= statusParts.length) statusIndex = 0
+  readonly property string statusCaps: statusParts.length ? String(statusParts[Math.min(statusIndex, statusParts.length - 1)]).toUpperCase() : ""
+
+  Timer {
+    interval: 3000
+    running: root.opened && root.statusParts.length > 1
+    repeat: true
+    onTriggered: root.statusIndex = (root.statusIndex + 1) % root.statusParts.length
   }
 
   readonly property string heroGlyph: "󱗆"
@@ -928,23 +939,50 @@ Panel {
           foreground: root.fg
         }
 
-        Flow {
+        Flickable {
+          id: tabStrip
           visible: root.showTabs && !root.settingsOpen
           width: parent.width
-          spacing: Style.space(4)
+          height: tabRow.implicitHeight
+          contentWidth: tabRow.implicitWidth
+          contentHeight: height
+          clip: true
+          flickableDirection: Flickable.HorizontalFlick
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentWidth > width
 
-          Repeater {
-            model: root.topicTabs
-            Button {
-              required property var modelData
-              text: modelData.label + (modelData.unread > 0 ? "  " + modelData.unread : "")
-              selected: root.topicFilter === modelData.topic
-              foreground: root.fg
-              fontFamily: root.fontFamily
-              fontSize: Style.font.caption
-              horizontalPadding: Style.space(8)
-              verticalPadding: Style.space(3)
-              onClicked: root.topicFilter = modelData.topic
+          function reveal(x, w) {
+            if (contentWidth <= width) return
+            if (x < contentX) contentX = x
+            else if (x + w > contentX + width) contentX = Math.min(contentWidth - width, x + w - width)
+          }
+
+          WheelHandler {
+            onWheel: function(event) {
+              var delta = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
+              tabStrip.contentX = Math.max(0, Math.min(tabStrip.contentWidth - tabStrip.width, tabStrip.contentX - delta))
+            }
+          }
+
+          Row {
+            id: tabRow
+            spacing: Style.space(4)
+
+            Repeater {
+              model: root.topicTabs
+              Button {
+                required property var modelData
+                text: modelData.label + (modelData.unread > 0 ? "  " + modelData.unread : "")
+                selected: root.topicFilter === modelData.topic
+                foreground: root.fg
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                horizontalPadding: Style.space(8)
+                verticalPadding: Style.space(3)
+                onClicked: root.topicFilter = modelData.topic
+                onSelectedChanged: if (selected) Qt.callLater(function() { tabStrip.reveal(x, width) })
+                Component.onCompleted: if (selected) Qt.callLater(function() { tabStrip.reveal(x, width) })
+              }
             }
           }
         }
@@ -997,7 +1035,7 @@ Panel {
           TextField {
             id: messageField
             width: parent.width
-            placeholderText: "Message — Enter sends, Esc closes"
+            placeholderText: "Message, Enter sends, Esc closes"
             foreground: root.fg
             font.family: root.fontFamily
             Keys.onPressed: function(event) { root.handleEditorKey(event, "message") }
@@ -1101,7 +1139,7 @@ Panel {
           wrapMode: Text.Wrap
           text: root.query !== ""
             ? "Nothing matches \"" + root.query + "\""
-            : (root.topicFilter ? "No messages in #" + root.topicFilter + " yet" : (root.connected ? "Inbox is empty — waiting for messages" : "No messages yet"))
+            : (root.topicFilter ? "No messages in #" + root.topicFilter + " yet" : (root.connected ? "Inbox is empty, waiting for messages" : "No messages yet"))
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
