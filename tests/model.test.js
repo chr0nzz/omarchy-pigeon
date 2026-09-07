@@ -336,3 +336,11 @@ test("fitLabel returns the full label when it fits and truncates the name otherw
   assert.ok(tiny.endsWith("…"))
   assert.equal(Model.fitLabel("ab", "", 40, 20, 12), "a…")
 })
+
+test("toastSummary counts messages and lists the last three titles", () => {
+  assert.deepEqual(Model.toastSummary(1, ["Disk full"]), { title: "1 new message", body: "Disk full" })
+  assert.deepEqual(Model.toastSummary(2, ["A", "B"]), { title: "2 new messages", body: "A\nB" })
+  assert.deepEqual(Model.toastSummary(5, ["A", "B", "C", "D"]), { title: "5 new messages", body: "B\nC\nD\nand 2 more" })
+  assert.deepEqual(Model.toastSummary(3, ["", " "]), { title: "3 new messages", body: "" })
+  assert.deepEqual(Model.toastSummary("junk", null), { title: "1 new message", body: "" })
+})

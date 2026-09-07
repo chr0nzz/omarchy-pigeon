@@ -421,9 +421,64 @@ Item {
     if (isNew && !own) maybeToast(msg)
   }
 
+  property var toastBatch: []
+  property double batchStartedAt: 0
+  property var toastHeadlines: []
+  property var toastByMessage: ({})
+  property int summaryToastId: 0
+  property int summaryCount: 0
+  property int summaryPriority: 0
+  property var summaryTitles: []
+  property string summaryHeadline: ""
+  property bool summaryDirty: false
+
   function maybeToast(msg) {
     if (!toastsEnabled || muted) return
     if (msg.priority < toastMinPriority) return
+    var now = Date.now()
+    if (!toastTimer.running) batchStartedAt = now
+    toastBatch = toastBatch.concat([msg])
+    if (now - batchStartedAt > 5000) flushToasts()
+    else toastTimer.restart()
+  }
+
+  Timer {
+    id: toastTimer
+    interval: 2000
+    onTriggered: root.flushToasts()
+  }
+
+  function flushToasts() {
+    toastTimer.stop()
+    var batch = toastBatch
+    toastBatch = []
+    if (!batch.length) return
+    if (batch.length === 1 && summaryCount === 0) {
+      sendToast(batch[0])
+      return
+    }
+    var titles = summaryTitles.slice()
+    for (var i = 0; i < batch.length; i++) {
+      titles.push(Model.displayTitle(batch[i]))
+      if (batch[i].priority > summaryPriority) summaryPriority = batch[i].priority
+    }
+    summaryTitles = titles.slice(-3)
+    summaryCount += batch.length
+    sendSummaryToast()
+  }
+
+  function rememberToast(id, headline) {
+    var list = toastHeadlines.concat([headline])
+    toastHeadlines = list.slice(-50)
+    if (id) {
+      var next = {}
+      for (var k in toastByMessage) next[k] = toastByMessage[k]
+      next[id] = headline
+      toastByMessage = next
+    }
+  }
+
+  function sendToast(msg) {
     var tags = Model.splitTags(msg.tags)
     var glyph = tags.emoji.length ? tags.emoji[0] : (msg.priority >= 4 ? Model.priorityGlyph(msg.priority) : "󰂚")
     var title = Model.toastTitle(msg)
@@ -433,7 +488,68 @@ Item {
     var click = Model.safeHttpUrl(msg.click)
     if (click) argv = argv.concat(["omarchy-launch-browser", click])
     else argv = argv.concat(["omarchy-shell", "shell", "summon", pluginId, "{}"])
+    rememberToast(msg.id, title)
     Quickshell.execDetached(argv)
+  }
+
+  function sendSummaryToast() {
+    if (summaryProc.running) {
+      summaryDirty = true
+      return
+    }
+    summaryDirty = false
+    var text = Model.toastSummary(summaryCount, summaryTitles)
+    summaryHeadline = text.title
+    var glyph = summaryPriority >= 4 ? Model.priorityGlyph(summaryPriority) : "󰂚"
+    var argv = ["omarchy-notification-send", "-p", "--app-name", "Pigeon", "-g", glyph, "-u", Model.urgencyFor(summaryPriority)]
+    if (summaryToastId > 0) argv = argv.concat(["-r", String(summaryToastId)])
+    argv = argv.concat([text.title, text.body, "--exec", "omarchy-shell", "shell", "summon", pluginId, "{}"])
+    summaryProc.command = argv
+    summaryProc.running = true
+  }
+
+  Process {
+    id: summaryProc
+    stdout: StdioCollector {
+      id: summaryOut
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      var id = parseInt(String(summaryOut.text || "").trim(), 10)
+      if (exitCode === 0 && id > 0) root.summaryToastId = id
+      if (root.summaryDirty) root.sendSummaryToast()
+    }
+  }
+
+  function dismissToast(headline) {
+    if (!headline) return
+    Quickshell.execDetached(["omarchy-shell", "-q", "notifications", "dismiss", headline])
+  }
+
+  function dismissToastFor(id) {
+    var headline = toastByMessage[id]
+    if (!headline) return
+    var next = {}
+    for (var k in toastByMessage) if (k !== id) next[k] = toastByMessage[k]
+    toastByMessage = next
+    toastHeadlines = toastHeadlines.filter(function(h) { return h !== headline })
+    dismissToast(headline)
+  }
+
+  function dismissAllToasts() {
+    toastTimer.stop()
+    toastBatch = []
+    var list = toastHeadlines
+    toastHeadlines = []
+    toastByMessage = {}
+    for (var i = 0; i < list.length; i++) dismissToast(list[i])
+    if (summaryHeadline) dismissToast(summaryHeadline)
+    summaryHeadline = ""
+    summaryToastId = 0
+    summaryCount = 0
+    summaryPriority = 0
+    summaryTitles = []
+    summaryDirty = false
   }
 
   function messageById(id) {
@@ -454,6 +570,7 @@ Item {
     })
     if (!changed) return
     messages = next
+    if (read !== false) dismissToastFor(id)
     recount()
     scheduleSave()
   }
@@ -470,6 +587,11 @@ Item {
     })
     if (!changed) return
     messages = next
+    if (topic) {
+      for (var i = 0; i < messages.length; i++) if (messages[i] && messages[i].topic === topic) dismissToastFor(messages[i].id)
+    } else {
+      dismissAllToasts()
+    }
     recount()
     scheduleSave()
   }
@@ -488,6 +610,7 @@ Item {
     if (next.length === messages.length) return
     bury([id])
     messages = next
+    dismissToastFor(id)
     recount()
     scheduleSave()
   }
@@ -502,6 +625,11 @@ Item {
     if (next.length === messages.length) return
     bury(gone)
     messages = next
+    if (topic) {
+      for (var g = 0; g < gone.length; g++) dismissToastFor(gone[g])
+    } else {
+      dismissAllToasts()
+    }
     recount()
     scheduleSave()
   }
@@ -732,6 +860,7 @@ Item {
   Component.onCompleted: mkdirProc.running = true
 
   Component.onDestruction: {
+    toastTimer.stop()
     watchdog.stop()
     backoffTimer.stop()
     restartRequested = true

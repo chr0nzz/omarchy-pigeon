@@ -12,6 +12,7 @@ and an entry in a themed popup inbox.
 - Anonymous, access token, or username and password auth
 - Bar pill with unread count that follows the theme, works in any section and on vertical bars
 - Native Omarchy toasts with the message's emoji tag, ntfy priority mapped to urgency, and a click that opens the link or the panel
+- Messages that arrive together become one toast. Opening the panel, marking read, deleting, or clearing dismisses the matching toasts
 - Inbox panel with topic tabs, search, unread dots, expand in place, image preview, `view` and `http` actions, open link, copy, delete, mark read or unread, mark all read, clear, mute, reconnect, and full keyboard navigation
 - Compose box to publish to any topic with a title and priority
 - IPC for scripts through `omarchy-shell`

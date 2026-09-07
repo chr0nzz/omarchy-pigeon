@@ -207,6 +207,15 @@ function toastBody(msg) {
   return String(msg.message || "")
 }
 
+function toastSummary(count, titles) {
+  var n = Math.max(1, parseInt(count, 10) || 1)
+  var list = toList(titles).filter(function(t) { return String(t || "").trim() !== "" })
+  var lines = list.slice(-3)
+  var extra = n - lines.length
+  if (extra > 0 && lines.length) lines.push("and " + extra + " more")
+  return { title: n + " new " + (n === 1 ? "message" : "messages"), body: lines.join("\n") }
+}
+
 function truncate(text, max) {
   var s = String(text || "")
   if (s.length <= max) return s

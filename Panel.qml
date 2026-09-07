@@ -162,6 +162,7 @@ Panel {
   }
 
   onTopicFilterChanged: { selectedIndex = 0 }
+  onOpenedChanged: if (opened && service) service.dismissAllToasts()
 
   Timer {
     interval: 30000
