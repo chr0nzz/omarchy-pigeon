@@ -71,6 +71,8 @@ Item {
   readonly property string authMode: String(setting("auth", "none")).toLowerCase()
   readonly property string authHeader: Model.authHeader(authMode, setting("token", ""), setting("username", ""), setting("password", ""))
   readonly property bool toastsEnabled: boolSetting("toasts", true)
+  readonly property bool soundEnabled: boolSetting("sound", false)
+  readonly property string soundPath: String(Qt.resolvedUrl("sounds/pigeon.wav")).replace(/^file:\/\//, "")
   readonly property int toastMinPriority: Model.clampPriority(setting("toastMinPriority", 2))
   readonly property string backfill: String(setting("backfill", "all"))
   readonly property int maxMessages: Math.max(20, parseInt(setting("maxMessages", 200), 10) || 200)
@@ -476,6 +478,7 @@ Item {
     var batch = toastBatch
     toastBatch = []
     if (!batch.length) return
+    playSound()
     if (batch.length === 1 && summaryCount === 0) {
       sendToast(batch[0])
       return
@@ -488,6 +491,11 @@ Item {
     summaryTitles = titles.slice(-3)
     summaryCount += batch.length
     sendSummaryToast()
+  }
+
+  function playSound() {
+    if (!soundEnabled) return
+    Quickshell.execDetached(["bash", "-c", 'if command -v pw-play >/dev/null 2>&1; then exec pw-play -- "$1"; fi; exec aplay -q -- "$1"', "pigeon-sound", soundPath])
   }
 
   function rememberToast(id, headline) {

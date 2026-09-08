@@ -20,6 +20,7 @@ Only the latest release on `main` receives fixes.
 | Access token, username, password | `~/.config/omarchy/shell.json` | Stored in plain text, same as every other widget setting. Protect the file with your user permissions |
 | Inbox, read state, cursors | `~/.local/state/omarchy/pigeon/state.json` | Full message bodies, plain text |
 | Clipboard | `wl-copy` | Only when you press `y` or click Copy |
+| Audio | `pw-play` or `aplay` | Only when `sound` is on, plays the bundled chime |
 
 ## Network behaviour
 

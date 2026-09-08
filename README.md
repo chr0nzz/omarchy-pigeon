@@ -14,13 +14,14 @@ and an entry in a themed popup inbox.
 - Native Omarchy toasts with the message's emoji tag, ntfy priority mapped to urgency, and a click that opens the link or the panel
 - Messages that arrive together become one toast. Opening the panel, marking read, deleting, or clearing dismisses the matching toasts
 - Inbox panel with topic tabs, search, unread dots, expand in place, image preview, `view` and `http` actions, open link, copy, delete, mark read or unread, mark all read, clear, mute, reconnect, and full keyboard navigation
-- Compose box to publish to any topic with a title and priority
+- Compose box with a topic picker, title, and priority
+- Optional chime with each toast
 - IPC for scripts through `omarchy-shell`
 - Inbox and read state survive shell restarts
 
 ## Requirements
 
-Omarchy 4 shell, `curl`, `jq`, `wl-copy`. All of them ship with Omarchy.
+Omarchy 4 shell, `curl`, `jq`, `wl-copy`, and `pw-play` or `aplay` for the chime. All of them ship with Omarchy.
 
 ## Install
 
@@ -62,6 +63,7 @@ between fields. It writes to the widget entry in `~/.config/omarchy/shell.json`,
 | `token` | `""` | Access token for `auth = token` |
 | `username` / `password` | `""` | Credentials for `auth = basic` |
 | `toasts` | `true` | Show desktop toasts for new messages |
+| `sound` | `false` | Play a short chime with each toast |
 | `toastMinPriority` | `2` | Lowest ntfy priority (1 to 5) that produces a toast |
 | `backfill` | `all` | History to load for a new topic: `all`, `12h`, `3d`, or `none` |
 | `maxMessages` | `200` | Messages kept in the inbox |

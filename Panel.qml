@@ -95,6 +95,7 @@ Panel {
   property string dUser: ""
   property string dPass: ""
   property bool dToasts: true
+  property bool dSound: false
   property int dMinPriority: 2
   property bool dAllowHttp: false
   property bool dShowCount: true
@@ -107,6 +108,12 @@ Panel {
   readonly property var rows: Model.filterMessages(allMessages, topicFilter, query)
   readonly property var topicTabs: buildTopicTabs(allMessages, service ? service.topics : [])
   readonly property bool showTabs: topicTabs.length > 1
+  readonly property var composeTopics: {
+    var list = service ? service.topics : []
+    var out = []
+    for (var i = 0; i < list.length; i++) out.push({ topic: list[i], label: "#" + list[i], unread: 0 })
+    return out
+  }
   readonly property bool configured: service ? service.configured && !service.authIncomplete : false
   readonly property bool connected: service ? service.status === "connected" : false
   readonly property bool muted: service ? service.muted : false
@@ -153,7 +160,7 @@ Panel {
       if (t && !seen[t]) { seen[t] = true; order.push(t) }
     }
     var tabs = [{ topic: "", label: "All", unread: Model.countUnread(messages, "").unread }]
-    for (var k = 0; k < order.length; k++) tabs.push({ topic: order[k], label: order[k], unread: Model.countUnread(messages, order[k]).unread })
+    for (var k = 0; k < order.length; k++) tabs.push({ topic: order[k], label: "#" + order[k], unread: Model.countUnread(messages, order[k]).unread })
     return tabs
   }
 
@@ -304,6 +311,7 @@ Panel {
     dUser = String(currentSetting("username", ""))
     dPass = String(currentSetting("password", ""))
     dToasts = asBool(currentSetting("toasts", true), true)
+    dSound = asBool(currentSetting("sound", false), false)
     dMinPriority = Model.clampPriority(currentSetting("toastMinPriority", 2))
     dAllowHttp = asBool(currentSetting("allowHttpActions", false), false)
     dShowCount = asBool(currentSetting("showCount", true), true)
@@ -380,6 +388,7 @@ Panel {
     entry.username = dAuth === "basic" ? dUser.trim() : ""
     entry.password = dAuth === "basic" ? dPass : ""
     entry.toasts = dToasts
+    entry.sound = dSound
     entry.toastMinPriority = dMinPriority
     entry.allowHttpActions = dAllowHttp
     entry.showCount = dShowCount
@@ -774,6 +783,15 @@ Panel {
             }
 
             SettingsToggle {
+              label: "Notification sound"
+              description: "Play a short chime with each toast"
+              enabled: root.dToasts
+              opacity: root.dToasts ? 1 : 0.5
+              checked: root.dSound
+              onClicked: root.dSound = !root.dSound
+            }
+
+            SettingsToggle {
               label: "Allow HTTP actions"
               description: "Let publishers attach buttons that send HTTP requests from this machine"
               checked: root.dAllowHttp
@@ -946,75 +964,14 @@ Panel {
           foreground: root.fg
         }
 
-        Item {
-          id: tabStrip
+        TopicStrip {
           visible: root.showTabs && !root.settingsOpen
           width: parent.width
-          height: tabRow.implicitHeight
-          readonly property int gap: Style.space(4)
-          readonly property int pad: Style.space(6)
-          property var fit: []
-
-          function scheduleFit() { Qt.callLater(refit) }
-
-          function refit() {
-            var naturals = []
-            for (var i = 0; i < tabRepeater.count; i++) {
-              var item = tabRepeater.itemAt(i)
-              naturals.push(item ? item.naturalWidth : 0)
-            }
-            fit = Model.fitWidths(naturals, width, gap)
-          }
-
-          onWidthChanged: scheduleFit()
-
-          Row {
-            id: tabRow
-            spacing: tabStrip.gap
-
-            Repeater {
-              id: tabRepeater
-              model: root.topicTabs
-              onItemAdded: tabStrip.scheduleFit()
-              onItemRemoved: tabStrip.scheduleFit()
-
-              Item {
-                id: tabItem
-                required property var modelData
-                required property int index
-                readonly property string suffix: modelData.unread > 0 ? "  " + modelData.unread : ""
-                readonly property string fullLabel: modelData.label + suffix
-                readonly property real naturalWidth: probe.implicitWidth
-                readonly property real assigned: tabStrip.fit[index] > 0 ? tabStrip.fit[index] : naturalWidth
-                width: assigned
-                height: tab.implicitHeight
-                onNaturalWidthChanged: tabStrip.scheduleFit()
-
-                Button {
-                  id: probe
-                  visible: false
-                  text: tabItem.fullLabel
-                  fontFamily: root.fontFamily
-                  fontSize: Style.font.caption
-                  horizontalPadding: tabStrip.pad
-                  verticalPadding: Style.space(3)
-                }
-
-                Button {
-                  id: tab
-                  width: tabItem.assigned
-                  text: Model.fitLabel(tabItem.modelData.label, tabItem.suffix, tabItem.naturalWidth, tabItem.assigned, tabStrip.pad * 2)
-                  selected: root.topicFilter === tabItem.modelData.topic
-                  foreground: root.fg
-                  fontFamily: root.fontFamily
-                  fontSize: Style.font.caption
-                  horizontalPadding: tabStrip.pad
-                  verticalPadding: Style.space(3)
-                  onClicked: root.topicFilter = tabItem.modelData.topic
-                }
-              }
-            }
-          }
+          tabs: root.topicTabs
+          current: root.topicFilter
+          foreground: root.fg
+          fontFamily: root.fontFamily
+          onPicked: function(topic) { root.topicFilter = topic }
         }
 
         TextField {
@@ -1037,6 +994,20 @@ Panel {
             text: "SEND A MESSAGE"
             foreground: root.fg
             fontFamily: root.fontFamily
+          }
+
+          TopicStrip {
+            visible: root.composeTopics.length > 0
+            width: parent.width
+            tabs: root.composeTopics
+            current: topicField.text
+            bordered: true
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            onPicked: function(topic) {
+              topicField.text = topic
+              messageField.forceActiveFocus()
+            }
           }
 
           Row {
