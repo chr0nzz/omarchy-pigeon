@@ -10,6 +10,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      HAS_MARKETPLACE_TOKEN: ${{ secrets.MARKETPLACE_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Check the tag matches manifest.json
@@ -29,7 +31,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
       - name: Open the marketplace verification issue
-        if: ${{ secrets.MARKETPLACE_TOKEN != '' }}
+        if: env.HAS_MARKETPLACE_TOKEN == 'true'
         env:
           GH_TOKEN: ${{ secrets.MARKETPLACE_TOKEN }}
         run: |
