@@ -449,7 +449,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(470))
+    contentWidth: panel.fittedContentWidth(Style.space(517))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -858,8 +858,11 @@ Panel {
                 anchors.verticalCenter: parent.verticalCenter
 
                 Button {
+                  id: saveButton
                   iconText: "󰆓"
                   text: "Save"
+                  width: Math.max(implicitWidth, cancelButton.implicitWidth)
+                  height: Math.max(implicitHeight, cancelButton.implicitHeight)
                   bordered: true
                   focusable: true
                   foreground: root.fg
@@ -869,7 +872,10 @@ Panel {
                   onClicked: root.saveSettings()
                 }
                 Button {
+                  id: cancelButton
                   text: "Cancel"
+                  width: Math.max(implicitWidth, saveButton.implicitWidth)
+                  height: Math.max(implicitHeight, saveButton.implicitHeight)
                   bordered: true
                   focusable: true
                   foreground: root.fg

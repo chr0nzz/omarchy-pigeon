@@ -136,6 +136,21 @@ omarchy-shell shell toggle xyzlab.pigeon '{}'
 
 Messages you publish from Pigeon show up already read and never toast.
 
+## Limits
+
+Anything past a limit is cut, an oversized stream line is dropped.
+
+| Item | Limit |
+| --- | --- |
+| Stream line | 64 KiB, a line with no end within 1 MiB reconnects |
+| Title | 256 characters |
+| Message | 8 KiB |
+| Link, icon, attachment, and action URLs | 2048 characters |
+| Tags | 16, 64 characters each |
+| Actions | 3, label 64 characters, body 4 KiB |
+| Action headers | 16, key 128, value 1024 characters |
+| Publish and action responses | 1 MiB |
+
 ## State
 
 | Path | Content |

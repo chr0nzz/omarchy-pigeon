@@ -35,6 +35,7 @@ Credentials go to `curl` through the process environment, never on the command l
 `curl` follows at most 3 redirects and drops the `Authorization` header when a redirect leaves the original host.
 Only `http` and `https` URLs are ever opened or fetched. Anything else from a message is ignored.
 Topic names are limited to `[A-Za-z0-9_-]` so a message or setting cannot change the request path.
+A bounded reader sits between `curl` and the shell: stream lines over 64 KiB are dropped before they reach QML, a line with no end within 1 MiB ends the connection, and every message field is cut to a fixed size before it is kept. The limits are listed in the [README](README.md#limits).
 
 ## Trust model
 

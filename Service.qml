@@ -343,7 +343,27 @@ Item {
     command: ["bash", "-c",
       'args=(-sS -N --no-buffer --connect-timeout 15 --keepalive-time 30 -L --max-redirs 3 -A "omarchy-pigeon/1.0"); '
       + 'if [[ -n ${PIGEON_AUTH:-} ]]; then args+=(-H "Authorization: $PIGEON_AUTH"); fi; '
-      + 'exec curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' -- "$1"',
+      + 'max=65536; drain=1048576; '
+      + 'curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' -- "$1" | LC_ALL=C bash -c \''
+      + 'max=$1; drain=$2; '
+      + 'while IFS= read -r -n "$max" line; do '
+      + 'if (( ${#line} == max )); then '
+      + 'IFS= read -r -n 1 c || break; '
+      + 'if [[ -n $c ]]; then '
+      + 'used=$(( max + 1 )); fatal=1; '
+      + 'while IFS= read -r -n "$max" chunk; do '
+      + 'used=$(( used + ${#chunk} )); '
+      + 'if (( ${#chunk} < max )); then fatal=0; break; fi; '
+      + 'IFS= read -r -n 1 c || break; '
+      + 'if [[ -z $c ]]; then fatal=0; break; fi; '
+      + 'used=$(( used + 1 )); '
+      + 'if (( used > drain )); then break; fi; '
+      + 'done; '
+      + 'if (( fatal )); then printf "%s\\n" "{\\"event\\":\\"pigeon_overflow\\",\\"fatal\\":true}"; exit 1; fi; '
+      + 'printf "%s\\n" "{\\"event\\":\\"pigeon_overflow\\"}"; continue; '
+      + 'fi; fi; '
+      + 'printf "%s\\n" "$line"; '
+      + 'done\' pigeon-reader "$max" "$drain"',
       "pigeon-stream", streamUrl]
     stdout: SplitParser {
       onRead: function(line) { root.handleLine(line) }
@@ -351,7 +371,7 @@ Item {
     stderr: SplitParser {
       onRead: function(line) {
         var s = String(line || "").trim()
-        if (s && !root.lastStderr) root.lastStderr = s.replace(/^curl:\s*\(\d+\)\s*/, "")
+        if (s && !root.lastStderr) root.lastStderr = Model.clip(s.replace(/^curl:\s*\(\d+\)\s*/, ""), Model.LIMITS.errorText)
       }
     }
     onExited: function(exitCode) {
@@ -384,8 +404,11 @@ Item {
       ingest(parsed.data)
       break
     case "error":
-      lastHttpBody = JSON.stringify(parsed.data)
+      lastHttpBody = Model.clip(JSON.stringify(parsed.data), Model.LIMITS.errorText)
       if (parsed.data.http) lastHttpCode = Number(parsed.data.http)
+      break
+    case "overflow":
+      lastError = "Dropped an oversized message"
       break
     case "exit":
       if (parsed.http) lastHttpCode = parsed.http
@@ -729,7 +752,7 @@ Item {
     property string targetUrl: ""
     environment: ({ PIGEON_METHOD: method, PIGEON_HEADERS: headersJson, PIGEON_BODY: body })
     command: ["bash", "-c",
-      'args=(-sS --connect-timeout 15 --max-time 30 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0"); '
+      'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0"); '
       + 'while IFS= read -r h; do [[ -n $h ]] && args+=(-H "$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)"\' <<<"$PIGEON_HEADERS" 2>/dev/null); '
       + 'if [[ -n ${PIGEON_BODY:-} ]]; then args+=(--data-binary "$PIGEON_BODY"); fi; '
       + 'curl "${args[@]}" -o /dev/null -w "%{http_code}" -- "$1"',
@@ -783,7 +806,7 @@ Item {
     property string payload: ""
     environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_BODY: payload })
     command: ["bash", "-c",
-      'args=(-sS --connect-timeout 15 --max-time 30 -H "Content-Type: application/json" -A "omarchy-pigeon/1.0"); '
+      'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -H "Content-Type: application/json" -A "omarchy-pigeon/1.0"); '
       + 'if [[ -n ${PIGEON_AUTH:-} ]]; then args+=(-H "Authorization: $PIGEON_AUTH"); fi; '
       + 'curl "${args[@]}" -w \'\\n%{http_code}\' --data-binary "$PIGEON_BODY" -- "$1"',
       "pigeon-publish", root.server]
@@ -815,8 +838,8 @@ Item {
       root.publishing = false
       root.publishOk = ok
       if (ok) root.publishStatus = "Sent"
-      else if (code) root.publishStatus = Model.describeHttpError(code, body)
-      else root.publishStatus = String(publishErr.text || "").trim().replace(/^curl:\s*\(\d+\)\s*/, "") || "Send failed"
+      else if (code) root.publishStatus = Model.describeHttpError(code, Model.clip(body, Model.LIMITS.errorText))
+      else root.publishStatus = Model.clip(String(publishErr.text || "").trim().replace(/^curl:\s*\(\d+\)\s*/, ""), Model.LIMITS.errorText) || "Send failed"
       root.publishFinished(ok, root.publishStatus)
       publishStatusReset.restart()
     }

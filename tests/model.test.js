@@ -344,3 +344,51 @@ test("toastSummary counts messages and lists the last three titles", () => {
   assert.deepEqual(Model.toastSummary(3, ["", " "]), { title: "3 new messages", body: "" })
   assert.deepEqual(Model.toastSummary("junk", null), { title: "1 new message", body: "" })
 })
+
+test("clip and clipHeaders enforce the documented caps", () => {
+  assert.equal(Model.clip("abc", 5), "abc")
+  assert.equal(Model.clip("abcdef", 3), "abc")
+  assert.equal(Model.clip(null, 3), "")
+  assert.equal(Model.clip(12345, 3), "123")
+  const many = {}
+  for (let i = 0; i < 40; i++) many["H" + i] = "v"
+  assert.equal(Object.keys(Model.clipHeaders(many)).length, Model.LIMITS.headers)
+  const long = Model.clipHeaders({ ["k".repeat(500)]: "v".repeat(5000), "": "x" })
+  const keys = Object.keys(long)
+  assert.equal(keys.length, 1)
+  assert.equal(keys[0].length, Model.LIMITS.headerKey)
+  assert.equal(long[keys[0]].length, Model.LIMITS.headerValue)
+  assert.deepEqual(Model.clipHeaders(["a"]), {})
+  assert.deepEqual(Model.clipHeaders("junk"), {})
+})
+
+test("normalizeMessage caps every retained field", () => {
+  const huge = "h".repeat(100000)
+  const out = Model.normalizeMessage({
+    event: "message", id: huge, topic: huge, title: huge, message: huge, click: huge, icon: huge, content_type: huge,
+    tags: Array.from({ length: 50 }, () => huge),
+    attachment: { name: huge, url: huge, type: huge },
+    actions: [{ action: "http", label: huge, url: huge, method: huge, body: huge, headers: { [huge]: huge } }]
+  })
+  assert.equal(out.id.length, Model.LIMITS.name)
+  assert.equal(out.topic.length, Model.LIMITS.tag)
+  assert.equal(out.title.length, Model.LIMITS.title)
+  assert.equal(out.message.length, Model.LIMITS.message)
+  assert.equal(out.click.length, Model.LIMITS.url)
+  assert.equal(out.icon.length, Model.LIMITS.url)
+  assert.equal(out.contentType.length, Model.LIMITS.name)
+  assert.equal(out.tags.length, Model.LIMITS.tags)
+  assert.equal(out.tags[0].length, Model.LIMITS.tag)
+  assert.equal(out.attachment.name.length, Model.LIMITS.name)
+  assert.equal(out.attachment.url.length, Model.LIMITS.url)
+  assert.equal(out.actions[0].label.length, Model.LIMITS.actionLabel)
+  assert.equal(out.actions[0].url.length, Model.LIMITS.url)
+  assert.equal(out.actions[0].method.length, 16)
+  assert.equal(out.actions[0].body.length, Model.LIMITS.actionBody)
+  assert.equal(Object.keys(out.actions[0].headers)[0].length, Model.LIMITS.headerKey)
+})
+
+test("parseStreamLine recognises overflow markers", () => {
+  assert.deepEqual(Model.parseStreamLine('{"event":"pigeon_overflow"}'), { kind: "overflow", fatal: false })
+  assert.deepEqual(Model.parseStreamLine('{"event":"pigeon_overflow","fatal":true}'), { kind: "overflow", fatal: true })
+})

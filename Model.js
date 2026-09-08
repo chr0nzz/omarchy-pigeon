@@ -3,6 +3,40 @@
 
 var PRIORITY_NAMES = { 1: "min", 2: "low", 3: "default", 4: "high", 5: "urgent" }
 
+var LIMITS = {
+  line: 65536,
+  title: 256,
+  message: 8192,
+  url: 2048,
+  name: 256,
+  tags: 16,
+  tag: 64,
+  actions: 3,
+  actionLabel: 64,
+  actionBody: 4096,
+  headers: 16,
+  headerKey: 128,
+  headerValue: 1024,
+  errorText: 1024
+}
+
+function clip(value, max) {
+  var s = String(value === undefined || value === null ? "" : value)
+  return s.length > max ? s.slice(0, max) : s
+}
+
+function clipHeaders(headers) {
+  var out = {}
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return out
+  var keys = Object.keys(headers)
+  for (var i = 0; i < keys.length && i < LIMITS.headers; i++) {
+    var key = clip(keys[i], LIMITS.headerKey)
+    if (!key) continue
+    out[key] = clip(headers[keys[i]], LIMITS.headerValue)
+  }
+  return out
+}
+
 function toList(value) {
   if (!value || typeof value !== "object" || typeof value.length !== "number") return []
   var out = []
@@ -111,43 +145,46 @@ function normalizeMessage(raw, unread) {
   var attachment = null
   if (raw.attachment && raw.attachment.url) {
     attachment = {
-      name: String(raw.attachment.name || ""),
-      url: String(raw.attachment.url || ""),
-      type: String(raw.attachment.type || ""),
+      name: clip(raw.attachment.name, LIMITS.name),
+      url: clip(raw.attachment.url, LIMITS.url),
+      type: clip(raw.attachment.type, LIMITS.name),
       size: Number(raw.attachment.size || 0),
       expires: Number(raw.attachment.expires || 0)
     }
   }
   var actions = []
   if (Array.isArray(raw.actions)) {
-    for (var i = 0; i < raw.actions.length && actions.length < 3; i++) {
+    for (var i = 0; i < raw.actions.length && actions.length < LIMITS.actions; i++) {
       var a = raw.actions[i] || {}
       var kind = String(a.action || "").toLowerCase()
       if (kind !== "view" && kind !== "http") continue
       actions.push({
         action: kind,
-        label: String(a.label || (kind === "view" ? "Open" : "Run")),
-        url: String(a.url || ""),
-        method: String(a.method || "POST").toUpperCase(),
-        headers: a.headers && typeof a.headers === "object" ? a.headers : {},
-        body: a.body === undefined || a.body === null ? "" : String(a.body),
+        label: clip(a.label || (kind === "view" ? "Open" : "Run"), LIMITS.actionLabel),
+        url: clip(a.url, LIMITS.url),
+        method: clip(String(a.method || "POST").toUpperCase(), 16),
+        headers: clipHeaders(a.headers),
+        body: clip(a.body, LIMITS.actionBody),
         clear: a.clear === true
       })
     }
   }
-  var tags = Array.isArray(raw.tags) ? raw.tags.map(function(t) { return String(t) }) : []
+  var tags = []
+  if (Array.isArray(raw.tags)) {
+    for (var t = 0; t < raw.tags.length && tags.length < LIMITS.tags; t++) tags.push(clip(raw.tags[t], LIMITS.tag))
+  }
   return {
-    id: id,
+    id: clip(id, LIMITS.name),
     time: Number(raw.time || 0),
     expires: Number(raw.expires || 0),
-    topic: String(raw.topic || ""),
-    title: String(raw.title || ""),
-    message: String(raw.message || ""),
+    topic: clip(raw.topic, LIMITS.tag),
+    title: clip(raw.title, LIMITS.title),
+    message: clip(raw.message, LIMITS.message),
     priority: clampPriority(raw.priority || 3),
     tags: tags,
-    click: String(raw.click || ""),
-    icon: String(raw.icon || ""),
-    contentType: String(raw.content_type || ""),
+    click: clip(raw.click, LIMITS.url),
+    icon: clip(raw.icon, LIMITS.url),
+    contentType: clip(raw.content_type, LIMITS.name),
     attachment: attachment,
     actions: actions,
     unread: unread !== false
@@ -304,6 +341,7 @@ function parseStreamLine(line) {
   try { obj = JSON.parse(raw) } catch (e) { return { kind: "invalid", raw: raw } }
   if (!obj || typeof obj !== "object") return { kind: "invalid", raw: raw }
   if (obj.event === "pigeon_exit") return { kind: "exit", http: Number(obj.http || 0) }
+  if (obj.event === "pigeon_overflow") return { kind: "overflow", fatal: obj.fatal === true }
   if (obj.event === "message") return { kind: "message", data: obj }
   if (obj.event === "open") return { kind: "open" }
   if (obj.event === "keepalive") return { kind: "keepalive" }
