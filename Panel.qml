@@ -20,8 +20,8 @@ Panel {
 
   function open() {
     openedFromHotkey = false
-    setCenterHoverRevealSuppressed(false)
     root.controller.show()
+    setCenterHoverRevealSuppressed(false)
     onOpened()
   }
 
@@ -45,10 +45,10 @@ Panel {
   }
 
   function close() {
-    setCenterHoverRevealSuppressed(false)
+    root.controller.hide()
     confirmOpen = false
     settingsOpen = false
-    root.controller.hide()
+    setCenterHoverRevealSuppressed(false)
   }
 
   function toggle() {
@@ -63,8 +63,14 @@ Panel {
   }
 
   function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
-      root.bar.centerHoverRevealSuppressed = value
+    if (!root.bar) return
+    try {
+      if (typeof root.bar.setCenterHoverRevealSuppressed === "function")
+        root.bar.setCenterHoverRevealSuppressed(value)
+      else if ("centerHoverRevealSuppressed" in root.bar)
+        root.bar.centerHoverRevealSuppressed = value
+    } catch (e) {
+    }
   }
 
   readonly property color fg: bar ? bar.foreground : Color.foreground
