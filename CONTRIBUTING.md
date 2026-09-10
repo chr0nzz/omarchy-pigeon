@@ -62,6 +62,8 @@ git tag -a v0.1.3 -m "v0.1.3"
 git push origin v0.1.3
 ```
 
-The release workflow checks the tag against `manifest.json`, runs the tests, creates the GitHub release, and opens the marketplace verification issue for the tagged commit. The last step needs a `MARKETPLACE_TOKEN` repository secret, a classic personal access token with the `public_repo` scope.
+The release workflow checks the tag against `manifest.json`, runs the tests, creates the GitHub release, and opens the marketplace verification issue for the tagged commit.
+
+Approval can take days, and any commit pushed in the meantime leaves the validated snapshot behind. The revalidation workflow handles that: on every push to `main` it looks for an open marketplace request that is not approved yet, compares the last validated commit against the new head, and edits the issue only when they differ. An already current request is left alone. The last step needs a `MARKETPLACE_TOKEN` repository secret, a classic personal access token with the `public_repo` scope.
 
 By contributing you agree that your work is released under the [MIT License](LICENSE).
