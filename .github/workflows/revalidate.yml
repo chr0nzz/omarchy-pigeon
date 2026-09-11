@@ -49,15 +49,18 @@ jobs:
           issues = json.loads(out.stdout or "[]")
 
           chosen = None
-          for issue in issues:
-              title = issue.get("title", "")
-              if not title.startswith("[Plugin]: %s" % name):
-                  continue
-              labels = [l["name"] for l in issue.get("labels", [])]
-              if "approved-and-verified" in labels or "maintainer-verified" in labels:
-                  continue
-              chosen = issue
-              break
+          for prefix in ("[Verify]: %s" % name, "[Plugin]: %s" % name):
+              for issue in issues:
+                  title = issue.get("title", "")
+                  if not title.startswith(prefix):
+                      continue
+                  labels = [l["name"] for l in issue.get("labels", [])]
+                  if "approved-and-verified" in labels or "maintainer-verified" in labels:
+                      continue
+                  chosen = issue
+                  break
+              if chosen:
+                  break
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               if chosen is None:
@@ -115,12 +118,17 @@ jobs:
           issue = json.load(open("/tmp/issue.json"))
           body = issue.get("body", "")
 
-          note = "Head moved to %s. Please validate the current head." % head[:7]
-
-          body = re.sub(
-              r"(### Maintainer notes\n\n).*?(\n\n### Submission checklist)",
-              lambda m: m.group(1) + note + m.group(2),
-              body, count=1, flags=re.S)
+          if issue.get("title", "").startswith("[Verify]:"):
+              body = re.sub(
+                  r"(### Target commit\s*\n\s*\n)[0-9a-f]{7,40}",
+                  lambda m: m.group(1) + head,
+                  body, count=1)
+          else:
+              note = "Head moved to %s. Please validate the current head." % head[:7]
+              body = re.sub(
+                  r"(### Maintainer notes\n\n).*?(\n\n### Submission checklist)",
+                  lambda m: m.group(1) + note + m.group(2),
+                  body, count=1, flags=re.S)
 
           with open("/tmp/new-body.md", "w") as fh:
               fh.write(body)
