@@ -1,6 +1,6 @@
 {
   "name": "omarchy-pigeon",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "ntfy inbox in the Omarchy bar",
   "license": "MIT",

@@ -25,16 +25,29 @@ function clip(value, max) {
   return s.length > max ? s.slice(0, max) : s
 }
 
+var HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+var HEADER_VALUE = /^[\x20-\x7E\t]*$/
+var METHOD = /^[A-Z]{1,16}$/
+
 function clipHeaders(headers) {
   var out = {}
   if (!headers || typeof headers !== "object" || Array.isArray(headers)) return out
   var keys = Object.keys(headers)
-  for (var i = 0; i < keys.length && i < LIMITS.headers; i++) {
+  var kept = 0
+  for (var i = 0; i < keys.length && kept < LIMITS.headers; i++) {
     var key = clip(keys[i], LIMITS.headerKey)
-    if (!key) continue
-    out[key] = clip(headers[keys[i]], LIMITS.headerValue)
+    if (!HEADER_NAME.test(key)) continue
+    var value = clip(headers[keys[i]], LIMITS.headerValue)
+    if (!HEADER_VALUE.test(value)) continue
+    out[key] = value
+    kept++
   }
   return out
+}
+
+function httpMethod(value) {
+  var m = String(value || "").toUpperCase()
+  return METHOD.test(m) ? m : "POST"
 }
 
 function toList(value) {
@@ -162,7 +175,7 @@ function normalizeMessage(raw, unread) {
         action: kind,
         label: clip(a.label || (kind === "view" ? "Open" : "Run"), LIMITS.actionLabel),
         url: clip(a.url, LIMITS.url),
-        method: clip(String(a.method || "POST").toUpperCase(), 16),
+        method: httpMethod(a.method || "POST"),
         headers: clipHeaders(a.headers),
         body: clip(a.body, LIMITS.actionBody),
         clear: a.clear === true

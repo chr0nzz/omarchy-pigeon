@@ -150,7 +150,8 @@ Anything past a limit is cut, an oversized stream line is dropped.
 | Link, icon, attachment, and action URLs | 2048 characters |
 | Tags | 16, 64 characters each |
 | Actions | 3, label 64 characters, body 4 KiB |
-| Action headers | 16, key 128, value 1024 characters |
+| Action headers | 16, key 128, value 1024 characters, names limited to token characters, values to printable ASCII |
+| Action method | Letters only, up to 16 |
 | Publish and action responses | 1 MiB |
 
 ## State

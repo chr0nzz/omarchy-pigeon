@@ -383,7 +383,7 @@ test("normalizeMessage caps every retained field", () => {
   assert.equal(out.attachment.url.length, Model.LIMITS.url)
   assert.equal(out.actions[0].label.length, Model.LIMITS.actionLabel)
   assert.equal(out.actions[0].url.length, Model.LIMITS.url)
-  assert.equal(out.actions[0].method.length, 16)
+  assert.equal(out.actions[0].method, "POST")
   assert.equal(out.actions[0].body.length, Model.LIMITS.actionBody)
   assert.equal(Object.keys(out.actions[0].headers)[0].length, Model.LIMITS.headerKey)
 })
@@ -391,4 +391,27 @@ test("normalizeMessage caps every retained field", () => {
 test("parseStreamLine recognises overflow markers", () => {
   assert.deepEqual(Model.parseStreamLine('{"event":"pigeon_overflow"}'), { kind: "overflow", fatal: false })
   assert.deepEqual(Model.parseStreamLine('{"event":"pigeon_overflow","fatal":true}'), { kind: "overflow", fatal: true })
+})
+
+test("clipHeaders drops names and values curl could misread", () => {
+  const out = Model.clipHeaders({
+    "X-Ok": "fine value",
+    "@/etc/passwd": "x",
+    "X-Colon:": "x",
+    "X Space": "x",
+    "X-Newline": "a\r\nInjected: b",
+    "X-Unicode": "é",
+    "X-Tab": "a\tb",
+    "": "x"
+  })
+  assert.deepEqual(out, { "X-Ok": "fine value", "X-Tab": "a\tb" })
+})
+
+test("httpMethod accepts letters only and falls back to POST", () => {
+  assert.equal(Model.httpMethod("put"), "PUT")
+  assert.equal(Model.httpMethod("DELETE"), "DELETE")
+  assert.equal(Model.httpMethod("@x"), "POST")
+  assert.equal(Model.httpMethod("GET HTTP/1.1"), "POST")
+  assert.equal(Model.httpMethod(""), "POST")
+  assert.equal(Model.httpMethod("A".repeat(17)), "POST")
 })
