@@ -166,6 +166,10 @@ Anything past a limit is cut, an oversized stream line is dropped.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, layout, tests, and style.
 Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
+## Community
+
+Questions, ideas, or want to show off your setup? Join the [xyzlab.dev Discord](https://discord.gg/eUb9CyuqHC).
+
 ## License
 
 [MIT](LICENSE)
