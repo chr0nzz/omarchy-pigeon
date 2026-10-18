@@ -346,7 +346,7 @@ Item {
       'args=(-sS -N --no-buffer --connect-timeout 15 --keepalive-time 30 -L --max-redirs 3 -A "omarchy-pigeon/1.0"); '
       + 'if [[ -n ${PIGEON_AUTH:-} ]]; then args+=(-H "Authorization: $PIGEON_AUTH"); fi; '
       + 'max=65536; drain=1048576; '
-      + 'trap "pkill -TERM -P $$" TERM; '
+      + 'trap "pkill -TERM -P $$; exit 143" TERM; '
       + 'curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' -- "$1" | LC_ALL=C bash -c \''
       + 'max=$1; drain=$2; '
       + 'while IFS= read -r -n "$max" line; do '
