@@ -12,50 +12,31 @@ Item {
   property bool bordered: false
   signal picked(string topic)
 
-  height: row.implicitHeight
+  height: flow.implicitHeight
   readonly property int gap: Style.space(4)
   readonly property int pad: Style.space(6)
-  property var fit: []
 
-  function scheduleFit() { Qt.callLater(refit) }
-
-  function refit() {
-    var naturals = []
-    for (var i = 0; i < repeater.count; i++) {
-      var item = repeater.itemAt(i)
-      naturals.push(item ? item.naturalWidth : 0)
-    }
-    fit = Model.fitWidths(naturals, width, gap)
-  }
-
-  onWidthChanged: scheduleFit()
-
-  Row {
-    id: row
+  Flow {
+    id: flow
+    width: strip.width
     spacing: strip.gap
 
     Repeater {
-      id: repeater
       model: strip.tabs
-      onItemAdded: strip.scheduleFit()
-      onItemRemoved: strip.scheduleFit()
 
       Item {
         id: tabItem
         required property var modelData
-        required property int index
         readonly property string suffix: modelData.unread > 0 ? "  " + modelData.unread : ""
-        readonly property string fullLabel: modelData.label + suffix
         readonly property real naturalWidth: probe.implicitWidth
-        readonly property real assigned: strip.fit[index] > 0 ? strip.fit[index] : naturalWidth
+        readonly property real assigned: strip.width > 0 ? Math.min(naturalWidth, strip.width) : naturalWidth
         width: assigned
         height: tab.implicitHeight
-        onNaturalWidthChanged: strip.scheduleFit()
 
         Button {
           id: probe
           visible: false
-          text: tabItem.fullLabel
+          text: tabItem.modelData.label + tabItem.suffix
           bordered: strip.bordered
           fontFamily: strip.fontFamily
           fontSize: Style.font.caption

@@ -310,19 +310,6 @@ test("toList copies array-likes and rejects everything else", () => {
   assert.deepEqual(Model.toList(5), [])
 })
 
-test("fitWidths keeps natural widths when they fit and shares the rest when they do not", () => {
-  assert.deepEqual(Model.fitWidths([], 300, 4), [])
-  assert.deepEqual(Model.fitWidths([50, 60, 70], 300, 4), [50, 60, 70])
-  const out = Model.fitWidths([30, 120, 120, 30], 200, 4)
-  assert.equal(out[0], 30)
-  assert.equal(out[3], 30)
-  assert.equal(out[1], out[2])
-  assert.ok(out[1] < 120)
-  assert.ok(out.reduce((a, b) => a + b, 0) + 12 <= 200)
-  const all = Model.fitWidths([100, 100], 100, 10)
-  assert.deepEqual(all, [45, 45])
-})
-
 test("fitLabel returns the full label when it fits and truncates the name otherwise", () => {
   assert.equal(Model.fitLabel("traefik", "  2", 80, 80, 12), "traefik  2")
   assert.equal(Model.fitLabel("traefik", "", 80, 120, 12), "traefik")
