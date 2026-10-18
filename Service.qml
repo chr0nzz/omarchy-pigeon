@@ -344,7 +344,7 @@ Item {
     environment: ({ PIGEON_AUTH: root.authHeader })
     command: ["bash", "-c",
       'args=(-sS -N --no-buffer --connect-timeout 15 --keepalive-time 30 -L --max-redirs 3 -A "omarchy-pigeon/1.0"); '
-      + 'if [[ -n ${PIGEON_AUTH:-} ]]; then args+=(-H "Authorization: $PIGEON_AUTH"); fi; '
+      + 'if [[ -n ${PIGEON_AUTH:-} ]]; then exec 3< <(printf "Authorization: %s\\n" "$PIGEON_AUTH"); args+=(-H @/dev/fd/3); fi; '
       + 'max=65536; drain=1048576; '
       + 'trap "pkill -TERM -P $$; exit 143" TERM; '
       + 'curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' -- "$1" | LC_ALL=C bash -c \''
@@ -763,7 +763,9 @@ Item {
     command: ["bash", "-c",
       'LC_ALL=C; [[ $PIGEON_METHOD =~ ^[A-Z]{1,16}$ ]] || exit 2; '
       + 'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0"); '
-      + 'while IFS= read -r h; do [[ $h =~ ^[!#$%\&\'*+.^_\`|~0-9A-Za-z-]+:\ [[:print:]]*$ ]] && args+=(-H "$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)"\' <<<"$PIGEON_HEADERS" 2>/dev/null); '
+      + 're=$\'^[!#$%&\\\'*+.^_`|~0-9A-Za-z-]+: [[:print:]]*$\'; '
+      + 'hdrs=(); while IFS= read -r h; do [[ $h =~ $re ]] && hdrs+=("$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)" | select(test("[[:cntrl:]]") | not)\' <<<"$PIGEON_HEADERS" 2>/dev/null); '
+      + 'if (( ${#hdrs[@]} )); then exec 3< <(printf "%s\\n" "${hdrs[@]}"); args+=(-H @/dev/fd/3); fi; '
       + 'if [[ -n ${PIGEON_BODY:-} ]]; then args+=(--data-binary @-); fi; '
       + 'printf "%s" "${PIGEON_BODY:-}" | curl "${args[@]}" -o /dev/null -w "%{http_code}" -- "$1"',
       "pigeon-action", targetUrl]
@@ -817,7 +819,7 @@ Item {
     environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_BODY: payload })
     command: ["bash", "-c",
       'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -H "Content-Type: application/json" -A "omarchy-pigeon/1.0"); '
-      + 'if [[ -n ${PIGEON_AUTH:-} ]]; then args+=(-H "Authorization: $PIGEON_AUTH"); fi; '
+      + 'if [[ -n ${PIGEON_AUTH:-} ]]; then exec 3< <(printf "Authorization: %s\\n" "$PIGEON_AUTH"); args+=(-H @/dev/fd/3); fi; '
       + 'printf "%s" "$PIGEON_BODY" | curl "${args[@]}" -w \'\\n%{http_code}\' --data-binary @- -- "$1"',
       "pigeon-publish", root.server]
     stdout: StdioCollector {

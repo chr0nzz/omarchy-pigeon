@@ -126,7 +126,7 @@ function authHeader(mode, token, username, password) {
   var m = String(mode || "none").toLowerCase()
   if (m === "token" || m === "bearer") {
     var t = String(token || "").trim()
-    return t ? "Bearer " + t : ""
+    return t && HEADER_VALUE.test(t) ? "Bearer " + t : ""
   }
   if (m === "basic" || m === "password") {
     var u = String(username || "")

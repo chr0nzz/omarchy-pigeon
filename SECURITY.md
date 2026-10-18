@@ -32,7 +32,7 @@ Only the latest release on `main` receives fixes.
 | Image preview | Attachment URL from the message | When a message with an image attachment is expanded |
 | `http` action | Any `http` or `https` URL from the message | Only on click or keypress, and only when `allowHttpActions` is on |
 
-Credentials go to `curl` through the process environment, never on the command line.
+Credentials and `http` action headers go to `curl` through the process environment and an inherited pipe read with `-H @/dev/fd/3`, never on the command line, so they do not show in `/proc/<pid>/cmdline` or `ps`.
 `curl` follows at most 3 redirects and drops the `Authorization` header when a redirect leaves the original host.
 Only `http` and `https` URLs are ever opened or fetched. Anything else from a message is ignored.
 Topic names are limited to `[A-Za-z0-9_-]` so a message or setting cannot change the request path.

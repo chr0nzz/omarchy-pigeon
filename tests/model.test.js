@@ -80,6 +80,8 @@ test("authHeader builds bearer and basic headers", () => {
   assert.equal(Model.authHeader("token", " tk_abc "), "Bearer tk_abc")
   assert.equal(Model.authHeader("bearer", "tk_abc"), "Bearer tk_abc")
   assert.equal(Model.authHeader("token", ""), "")
+  assert.equal(Model.authHeader("token", "tk_abc\nX-Injected: 1"), "")
+  assert.equal(Model.authHeader("token", "tk_é"), "")
   assert.equal(Model.authHeader("basic", "", "user", "pass"), "Basic " + Buffer.from("user:pass").toString("base64"))
   assert.equal(Model.authHeader("password", "", "user", ""), "Basic " + Buffer.from("user:").toString("base64"))
   assert.equal(Model.authHeader("basic", "", "", "pass"), "")
