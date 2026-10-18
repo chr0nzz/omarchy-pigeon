@@ -17,7 +17,9 @@ var LIMITS = {
   headers: 16,
   headerKey: 128,
   headerValue: 1024,
-  errorText: 1024
+  errorText: 1024,
+  preview: 10485760,
+  previews: 16
 }
 
 function clip(value, max) {
@@ -284,6 +286,12 @@ function isImageAttachment(att) {
   if (!att || !att.url) return false
   if (/^image\//i.test(String(att.type || ""))) return true
   return /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i.test(String(att.name || att.url))
+}
+
+function previewUrl(att) {
+  if (!isImageAttachment(att)) return ""
+  if (Number(att.size || 0) > LIMITS.preview) return ""
+  return safeHttpUrl(att.url)
 }
 
 function pad2(n) { return (n < 10 ? "0" : "") + n }

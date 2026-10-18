@@ -216,6 +216,17 @@ test("isImageAttachment uses content type then file name", () => {
   assert.equal(Model.isImageAttachment(null), false)
 })
 
+test("previewUrl only passes http images within the size cap", () => {
+  assert.equal(Model.previewUrl({ url: "https://x/f.png", size: 1024 }), "https://x/f.png")
+  assert.equal(Model.previewUrl({ url: " http://x/f", type: "image/jpeg" }), "http://x/f")
+  assert.equal(Model.previewUrl({ url: "https://x/f.png", size: Model.LIMITS.preview }), "https://x/f.png")
+  assert.equal(Model.previewUrl({ url: "https://x/f.png", size: Model.LIMITS.preview + 1 }), "")
+  assert.equal(Model.previewUrl({ url: "file:///etc/passwd.png" }), "")
+  assert.equal(Model.previewUrl({ url: "image://provider/x.png" }), "")
+  assert.equal(Model.previewUrl({ url: "https://x/f.pdf", type: "application/pdf" }), "")
+  assert.equal(Model.previewUrl(null), "")
+})
+
 test("relativeTime steps from now to minutes, hours, clock, yesterday, weekday and date", () => {
   const now = new Date(2026, 8, 9, 12, 0, 0)
   const nowMs = now.getTime()

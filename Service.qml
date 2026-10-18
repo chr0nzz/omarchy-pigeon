@@ -15,6 +15,7 @@ Item {
   readonly property string home: Quickshell.env("HOME") || ""
   readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || home + "/.local/state") + "/omarchy/pigeon"
   readonly property string statePath: stateDir + "/state.json"
+  readonly property string previewDir: (Quickshell.env("XDG_CACHE_HOME") || home + "/.cache") + "/omarchy/pigeon/previews"
 
   readonly property var defaults: manifest && manifest.barWidget && manifest.barWidget.defaults ? manifest.barWidget.defaults : ({})
   readonly property var settings: resolveSettings(shell ? (shell.barConfig || shell.shellConfig) : null)
@@ -704,6 +705,89 @@ Item {
     return false
   }
 
+  property bool previewDirReady: false
+  property var previews: ({})
+  property var previewFiles: []
+  property string previewPending: ""
+
+  function previewState(url) {
+    var p = url ? previews[url] : null
+    return p ? p.state : ""
+  }
+
+  function previewSource(url) {
+    var p = url ? previews[url] : null
+    return p && p.state === "ready" ? "file://" + p.path : ""
+  }
+
+  function setPreview(url, entry) {
+    var next = {}
+    for (var k in previews) if (k !== url) next[k] = previews[k]
+    if (entry) next[url] = entry
+    previews = next
+  }
+
+  function requestPreview(att) {
+    fetchPreview(Model.previewUrl(att))
+  }
+
+  function fetchPreview(url) {
+    if (!url || (previews[url] && previews[url].state !== "failed")) return
+    if (!previewDirReady || previewProc.running) {
+      previewPending = url
+      return
+    }
+    var path = previewDir + "/" + Qt.md5(url)
+    setPreview(url, { state: "loading", path: path })
+    previewProc.url = url
+    previewProc.path = path
+    previewProc.running = true
+  }
+
+  function finishPreview(url, path, ok) {
+    setPreview(url, { state: ok ? "ready" : "failed", path: path })
+    if (ok) {
+      var files = previewFiles.concat([url])
+      while (files.length > Model.LIMITS.previews) {
+        var old = files.shift()
+        var gone = previews[old]
+        setPreview(old, null)
+        if (gone) Quickshell.execDetached(["rm", "-f", "--", gone.path])
+      }
+      previewFiles = files
+    }
+    fetchPendingPreview()
+  }
+
+  function fetchPendingPreview() {
+    var pending = previewPending
+    previewPending = ""
+    fetchPreview(pending)
+  }
+
+  Process {
+    id: previewDirProc
+    command: ["bash", "-c", 'mkdir -p -- "$1" && rm -f -- "$1"/*', "pigeon-previews", root.previewDir]
+    onExited: {
+      root.previewDirReady = true
+      root.fetchPendingPreview()
+    }
+  }
+
+  Process {
+    id: previewProc
+    property string url: ""
+    property string path: ""
+    command: ["bash", "-c",
+      'set -o pipefail; max=$1; out=$2; '
+      + 'curl -sS -f -L --max-redirs 3 --proto =http,https --proto-redir =http,https --connect-timeout 15 --max-time 60 --max-filesize "$max" -A "omarchy-pigeon/1.0" -- "$3" '
+      + '| head -c "$(( max + 1 ))" > "$out.part" '
+      + '&& (( $(stat -c %s -- "$out.part") <= max )) && mv -f -- "$out.part" "$out" && exit 0; '
+      + 'rm -f -- "$out.part"; exit 1',
+      "pigeon-preview", String(Model.LIMITS.preview), path, url]
+    onExited: function(exitCode) { root.finishPreview(url, path, exitCode === 0) }
+  }
+
   function copyMessage(msg) {
     if (!msg) return
     var text = msg.title ? msg.title + "\n" + msg.message : msg.message
@@ -892,7 +976,10 @@ Item {
     function unmute(): void { root.setMute(0) }
   }
 
-  Component.onCompleted: mkdirProc.running = true
+  Component.onCompleted: {
+    mkdirProc.running = true
+    previewDirProc.running = true
+  }
 
   Component.onDestruction: {
     toastTimer.stop()

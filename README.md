@@ -153,6 +153,7 @@ Anything past a limit is cut, an oversized stream line is dropped.
 | Action headers | 16, key 128, value 1024 characters, names limited to token characters, values to printable ASCII |
 | Action method | Letters only, up to 16 |
 | Publish and action responses | 1 MiB |
+| Image preview | 10 MiB download, decoded at up to 1200 px a side, 16 kept on disk |
 
 ## State
 
@@ -160,6 +161,7 @@ Anything past a limit is cut, an oversized stream line is dropped.
 | --- | --- |
 | `~/.config/omarchy/shell.json` | Settings, including credentials |
 | `~/.local/state/omarchy/pigeon/state.json` | Inbox, read state, per-topic cursors, deleted ids |
+| `~/.cache/omarchy/pigeon/previews/` | Downloaded image previews, emptied when the shell starts |
 
 ## Contributing
 

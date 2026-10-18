@@ -19,6 +19,7 @@ Only the latest release on `main` receives fixes.
 | Server URL, topics, auth mode | `~/.config/omarchy/shell.json` | Written by the settings editor and `omarchy bar set` |
 | Access token, username, password | `~/.config/omarchy/shell.json` | Stored in plain text, same as every other widget setting. Protect the file with your user permissions |
 | Inbox, read state, cursors | `~/.local/state/omarchy/pigeon/state.json` | Full message bodies, plain text |
+| Image previews | `~/.cache/omarchy/pigeon/previews/` | Up to 16 downloaded attachments, emptied when the shell starts |
 | Clipboard | `wl-copy` | Only when you press `y` or click Copy |
 | Audio | `pw-play` or `aplay` | Only when `sound` is on, plays the bundled chime |
 
@@ -29,7 +30,7 @@ Only the latest release on `main` receives fixes.
 | Subscribe stream | Configured server only | Always, while topics are set |
 | Publish | Configured server only | Compose box or `omarchy-shell pigeon publish` |
 | Open link, open attachment, `view` action | Any `http` or `https` URL from the message | Only on click or keypress |
-| Image preview | Attachment URL from the message | When a message with an image attachment is expanded |
+| Image preview | Attachment URL from the message, fetched by `curl` without credentials | When a message with an image attachment is expanded |
 | `http` action | Any `http` or `https` URL from the message | Only on click or keypress, and only when `allowHttpActions` is on |
 
 Credentials and `http` action headers go to `curl` through the process environment and an inherited pipe read with `-H @/dev/fd/3`, never on the command line, so they do not show in `/proc/<pid>/cmdline` or `ps`.
@@ -37,6 +38,7 @@ Credentials and `http` action headers go to `curl` through the process environme
 Only `http` and `https` URLs are ever opened or fetched. Anything else from a message is ignored.
 Topic names are limited to `[A-Za-z0-9_-]` so a message or setting cannot change the request path.
 Request bodies reach `curl` on stdin and header names are limited to token characters, so `@file` and other `curl` syntax in a message can never read a local file.
+QML never loads a remote URL. Image previews are downloaded by `curl` into the cache with a 10 MiB cap, enforced by `--max-filesize` and again by `head -c`, a 60 second timeout, and `http`/`https` only across redirects. The preview `Image` only reads that local file, decodes at no more than 1200 px a side without upscaling, and Qt rejects any image that would need more than 256 MB to decode.
 A bounded reader sits between `curl` and the shell: stream lines over 64 KiB are dropped before they reach QML, a line with no end within 1 MiB ends the connection, and every message field is cut to a fixed size before it is kept. The limits are listed in the [README](README.md#limits).
 
 ## Trust model

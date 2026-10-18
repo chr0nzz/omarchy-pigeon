@@ -27,7 +27,10 @@ CursorSurface {
   readonly property string timeText: Model.relativeTime(message.time, nowMs)
   readonly property var attachment: message.attachment
   readonly property bool hasAttachment: !!(attachment && attachment.url)
-  readonly property bool isImage: Model.isImageAttachment(attachment)
+  readonly property string previewUrl: Model.previewUrl(attachment)
+  readonly property bool isImage: previewUrl !== ""
+  readonly property string previewState: service && isImage ? service.previewState(previewUrl) : ""
+  readonly property string previewSource: service && isImage ? service.previewSource(previewUrl) : ""
   readonly property var actions: Model.toList(message.actions)
   readonly property string clickUrl: Model.safeHttpUrl(message.click)
   readonly property bool showInlineActions: hasCursor || mouse.containsMouse
@@ -43,6 +46,13 @@ CursorSurface {
   fill: Style.hoverFillFor(fg, accent)
   currentFill: Style.selectedFillFor(fg, accent)
   implicitHeight: content.implicitHeight + Style.space(14)
+
+  function loadPreview() {
+    if (expanded && isImage && service) service.requestPreview(attachment)
+  }
+
+  onExpandedChanged: loadPreview()
+  Component.onCompleted: loadPreview()
 
   function actionStateText(index) {
     if (!service) return ""
@@ -215,20 +225,18 @@ CursorSurface {
 
         Image {
           id: preview
-          visible: row.isImage && status !== Image.Error
-          width: parent.width
-          height: status === Image.Ready && implicitWidth > 0
-            ? Math.min(Style.space(220), Math.round(width * implicitHeight / implicitWidth))
-            : (row.isImage ? Style.space(28) : 0)
-          fillMode: Image.PreserveAspectFit
+          readonly property real aspect: status === Image.Ready && implicitHeight > 0 ? implicitWidth / implicitHeight : 0
+          visible: row.isImage && row.previewState !== "failed" && status !== Image.Error
+          width: aspect > 0 ? Math.min(parent.width, Math.round(Style.space(220) * aspect)) : parent.width
+          height: aspect > 0 ? Math.round(width / aspect) : (row.isImage ? Style.space(28) : 0)
           asynchronous: true
-          horizontalAlignment: Image.AlignLeft
-          source: row.expanded && row.isImage ? row.attachment.url : ""
+          source: row.expanded ? row.previewSource : ""
           sourceSize.width: 1200
+          sourceSize.height: 1200
 
           Text {
             anchors.centerIn: parent
-            visible: preview.status === Image.Loading
+            visible: preview.status === Image.Loading || (row.expanded && row.isImage && row.previewSource === "")
             text: "Loading preview…"
             color: row.dim
             font.family: row.fontFamily
