@@ -223,6 +223,7 @@ test("previewUrl only passes http images within the size cap", () => {
   assert.equal(Model.previewUrl({ url: "https://x/f.png", size: Model.LIMITS.preview + 1 }), "")
   assert.equal(Model.previewUrl({ url: "file:///etc/passwd.png" }), "")
   assert.equal(Model.previewUrl({ url: "image://provider/x.png" }), "")
+  assert.equal(Model.previewUrl({ url: "https://x/f.png\nb" }), "")
   assert.equal(Model.previewUrl({ url: "https://x/f.pdf", type: "application/pdf" }), "")
   assert.equal(Model.previewUrl(null), "")
 })
@@ -282,6 +283,16 @@ test("safeHttpUrl only passes http and https", () => {
   assert.equal(Model.safeHttpUrl("example.com"), "")
   assert.equal(Model.safeHttpUrl(""), "")
   assert.equal(Model.safeHttpUrl(null), "")
+})
+
+test("curlUrlConfig quotes one http url and rejects anything that could add a config line", () => {
+  assert.equal(Model.curlUrlConfig(" https://ntfy.sh/a,b/json?since=all "), 'url = "https://ntfy.sh/a,b/json?since=all"\n')
+  assert.equal(Model.curlUrlConfig('https://x/a"b\\c'), 'url = "https://x/a\\"b\\\\c"\n')
+  assert.equal(Model.curlUrlConfig("https://x/a\noutput = /tmp/pwn"), "")
+  assert.equal(Model.curlUrlConfig("https://x/a\rb"), "")
+  assert.equal(Model.curlUrlConfig("https://x/\x7f"), "")
+  assert.equal(Model.curlUrlConfig("file:///etc/passwd"), "")
+  assert.equal(Model.curlUrlConfig(""), "")
 })
 
 test("parseStreamLine classifies ntfy stream lines", () => {

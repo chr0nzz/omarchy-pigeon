@@ -33,7 +33,7 @@ Only the latest release on `main` receives fixes.
 | Image preview | Attachment URL from the message, fetched by `curl` without credentials | When a message with an image attachment is expanded |
 | `http` action | Any `http` or `https` URL from the message | Only on click or keypress, and only when `allowHttpActions` is on |
 
-Credentials and `http` action headers go to `curl` through the process environment and an inherited pipe read with `-H @/dev/fd/3`, never on the command line, so they do not show in `/proc/<pid>/cmdline` or `ps`.
+`curl` runs with `-g`, so `[]` and `{}` in a URL are sent as written and never expand into several requests.
 `curl` follows at most 3 redirects and drops the `Authorization` header when a redirect leaves the original host.
 Only `http` and `https` URLs are ever opened or fetched. Anything else from a message is ignored.
 Topic names are limited to `[A-Za-z0-9_-]` so a message or setting cannot change the request path.
@@ -41,11 +41,29 @@ Request bodies reach `curl` on stdin and header names are limited to token chara
 QML never loads a remote URL. Image previews are downloaded by `curl` into the cache with a 10 MiB cap, enforced by `--max-filesize` and again by `head -c`, a 60 second timeout, and `http`/`https` only across redirects. The preview `Image` only reads that local file, decodes at no more than 1200 px a side without upscaling, and Qt rejects any image that would need more than 256 MB to decode.
 A bounded reader sits between `curl` and the shell: stream lines over 64 KiB are dropped before they reach QML, a line with no end within 1 MiB ends the connection, and every message field is cut to a fixed size before it is kept. The limits are listed in the [README](README.md#limits).
 
+## Command lines
+
+Other local accounts can read process command lines with `ps` or `/proc/<pid>/cmdline`. Pigeon keeps private data out of them:
+
+| Data | Path into the child process |
+| --- | --- |
+| Credentials, `http` action headers | Environment, then an inherited pipe read with `curl -H @/dev/fd/3` |
+| Request URLs, including topic names | Environment, then a `curl` config on an inherited pipe read with `-K /dev/fd/4` |
+| Publish and action bodies | Environment, then `curl` stdin |
+| Copied message text | Environment, then `wl-copy` stdin. The variable is removed before `wl-copy` starts |
+
+Two paths still pass message data as arguments, because the programs they call only take arguments:
+
+| Path | Arguments |
+| --- | --- |
+| Open link, open attachment, `view` action | The URL, to `omarchy-launch-browser` |
+| Toasts | Headline and body to `omarchy-notification-send`, which hands them to `busctl`, and the headline to `omarchy-shell notifications dismiss` once the message is read. Set `toasts` to `false` to avoid this |
+
 ## Trust model
 
 - The ntfy server and anyone who can publish to your topics control message content, links, attachments, and actions. An unprotected topic name is a public address.
 - `http` actions run a request from your machine to a publisher chosen URL with publisher chosen method, headers, and body. Keep `allowHttpActions` off unless you trust every publisher on every topic.
-- The `omarchy-shell pigeon` IPC commands are available to any process running as your user.
+- The `omarchy-shell pigeon` IPC commands are available to any process running as your user. Text given to `omarchy-shell pigeon publish` is part of that command's own arguments.
 - Message text is rendered as plain text, never as rich text or markdown.
 
 ## Out of scope

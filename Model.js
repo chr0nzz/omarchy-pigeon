@@ -291,7 +291,8 @@ function isImageAttachment(att) {
 function previewUrl(att) {
   if (!isImageAttachment(att)) return ""
   if (Number(att.size || 0) > LIMITS.preview) return ""
-  return safeHttpUrl(att.url)
+  var url = safeHttpUrl(att.url)
+  return curlUrlConfig(url) ? url : ""
 }
 
 function pad2(n) { return (n < 10 ? "0" : "") + n }
@@ -353,6 +354,12 @@ function filterMessages(list, topic, query) {
 function safeHttpUrl(url) {
   var s = String(url || "").trim()
   return /^https?:\/\//i.test(s) ? s : ""
+}
+
+function curlUrlConfig(url) {
+  var s = safeHttpUrl(url)
+  if (!s || /[\x00-\x1f\x7f]/.test(s)) return ""
+  return 'url = "' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"\n'
 }
 
 function parseStreamLine(line) {

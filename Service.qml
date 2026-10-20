@@ -342,13 +342,14 @@ Item {
   Process {
     id: streamProc
     property string streamUrl: ""
-    environment: ({ PIGEON_AUTH: root.authHeader })
+    environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_URL: Model.curlUrlConfig(streamUrl) })
     command: ["bash", "-c",
-      'args=(-sS -N --no-buffer --connect-timeout 15 --keepalive-time 30 -L --max-redirs 3 -A "omarchy-pigeon/1.0"); '
+      '[[ -n ${PIGEON_URL:-} ]] || exit 2; exec 4< <(printf "%s" "$PIGEON_URL"); '
+      + 'args=(-sS -N -g --no-buffer --connect-timeout 15 --keepalive-time 30 -L --max-redirs 3 -A "omarchy-pigeon/1.0" -K /dev/fd/4); '
       + 'if [[ -n ${PIGEON_AUTH:-} ]]; then exec 3< <(printf "Authorization: %s\\n" "$PIGEON_AUTH"); args+=(-H @/dev/fd/3); fi; '
       + 'max=65536; drain=1048576; '
       + 'trap "pkill -TERM -P $$; exit 143" TERM; '
-      + 'curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' -- "$1" | LC_ALL=C bash -c \''
+      + 'curl "${args[@]}" -w \'\\n{"event":"pigeon_exit","http":%{http_code}}\\n\' | LC_ALL=C bash -c \''
       + 'max=$1; drain=$2; '
       + 'while IFS= read -r -n "$max" line; do '
       + 'if (( ${#line} == max )); then '
@@ -367,8 +368,7 @@ Item {
       + 'printf "%s\\n" "{\\"event\\":\\"pigeon_overflow\\"}"; continue; '
       + 'fi; fi; '
       + 'printf "%s\\n" "$line"; '
-      + 'done\' pigeon-reader "$max" "$drain" & wait $!',
-      "pigeon-stream", streamUrl]
+      + 'done\' pigeon-reader "$max" "$drain" & wait $!']
     stdout: SplitParser {
       onRead: function(line) { root.handleLine(line) }
     }
@@ -778,20 +778,25 @@ Item {
     id: previewProc
     property string url: ""
     property string path: ""
+    environment: ({ PIGEON_URL: Model.curlUrlConfig(url) })
     command: ["bash", "-c",
       'set -o pipefail; max=$1; out=$2; '
-      + 'curl -sS -f -L --max-redirs 3 --proto =http,https --proto-redir =http,https --connect-timeout 15 --max-time 60 --max-filesize "$max" -A "omarchy-pigeon/1.0" -- "$3" '
+      + '[[ -n ${PIGEON_URL:-} ]] || exit 1; exec 4< <(printf "%s" "$PIGEON_URL"); '
+      + 'curl -sS -f -g -L --max-redirs 3 --proto =http,https --proto-redir =http,https --connect-timeout 15 --max-time 60 --max-filesize "$max" -A "omarchy-pigeon/1.0" -K /dev/fd/4 '
       + '| head -c "$(( max + 1 ))" > "$out.part" '
       + '&& (( $(stat -c %s -- "$out.part") <= max )) && mv -f -- "$out.part" "$out" && exit 0; '
       + 'rm -f -- "$out.part"; exit 1',
-      "pigeon-preview", String(Model.LIMITS.preview), path, url]
+      "pigeon-preview", String(Model.LIMITS.preview), path]
     onExited: function(exitCode) { root.finishPreview(url, path, exitCode === 0) }
   }
 
   function copyMessage(msg) {
     if (!msg) return
     var text = msg.title ? msg.title + "\n" + msg.message : msg.message
-    Util.execArgv(["wl-copy", "--", text])
+    Quickshell.execDetached({
+      command: ["bash", "-c", 'printf "%s" "$PIGEON_TEXT" | { unset PIGEON_TEXT; exec wl-copy; }'],
+      environment: { PIGEON_TEXT: text }
+    })
   }
 
   function actionKey(msg, index) { return String(msg ? msg.id : "") + ":" + index }
@@ -821,7 +826,7 @@ Item {
         return
       }
       var url = Model.safeHttpUrl(action.url)
-      if (!url) return
+      if (!Model.curlUrlConfig(url)) return
       if (httpActionProc.running) return
       httpActionProc.stateKey = actionKey(msg, index)
       httpActionProc.clearAfter = action.clear === true ? msg.id : ""
@@ -843,16 +848,16 @@ Item {
     property string headersJson: "{}"
     property string body: ""
     property string targetUrl: ""
-    environment: ({ PIGEON_METHOD: method, PIGEON_HEADERS: headersJson, PIGEON_BODY: body })
+    environment: ({ PIGEON_METHOD: method, PIGEON_HEADERS: headersJson, PIGEON_BODY: body, PIGEON_URL: Model.curlUrlConfig(targetUrl) })
     command: ["bash", "-c",
       'LC_ALL=C; [[ $PIGEON_METHOD =~ ^[A-Z]{1,16}$ ]] || exit 2; '
-      + 'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0"); '
+      + '[[ -n ${PIGEON_URL:-} ]] || exit 2; exec 4< <(printf "%s" "$PIGEON_URL"); '
+      + 'args=(-sS -g --connect-timeout 15 --max-time 30 --max-filesize 1048576 -X "$PIGEON_METHOD" -A "omarchy-pigeon/1.0" -K /dev/fd/4); '
       + 're=$\'^[!#$%&\\\'*+.^_`|~0-9A-Za-z-]+: [[:print:]]*$\'; '
       + 'hdrs=(); while IFS= read -r h; do [[ $h =~ $re ]] && hdrs+=("$h"); done < <(jq -r \'to_entries[] | "\\(.key): \\(.value)" | select(test("[[:cntrl:]]") | not)\' <<<"$PIGEON_HEADERS" 2>/dev/null); '
       + 'if (( ${#hdrs[@]} )); then exec 3< <(printf "%s\\n" "${hdrs[@]}"); args+=(-H @/dev/fd/3); fi; '
       + 'if [[ -n ${PIGEON_BODY:-} ]]; then args+=(--data-binary @-); fi; '
-      + 'printf "%s" "${PIGEON_BODY:-}" | curl "${args[@]}" -o /dev/null -w "%{http_code}" -- "$1"',
-      "pigeon-action", targetUrl]
+      + 'printf "%s" "${PIGEON_BODY:-}" | curl "${args[@]}" -o /dev/null -w "%{http_code}"']
     stdout: StdioCollector {
       id: actionOut
       waitForEnd: true
@@ -900,12 +905,12 @@ Item {
   Process {
     id: publishProc
     property string payload: ""
-    environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_BODY: payload })
+    environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_BODY: payload, PIGEON_URL: Model.curlUrlConfig(root.server) })
     command: ["bash", "-c",
-      'args=(-sS --connect-timeout 15 --max-time 30 --max-filesize 1048576 -H "Content-Type: application/json" -A "omarchy-pigeon/1.0"); '
+      '[[ -n ${PIGEON_URL:-} ]] || exit 2; exec 4< <(printf "%s" "$PIGEON_URL"); '
+      + 'args=(-sS -g --connect-timeout 15 --max-time 30 --max-filesize 1048576 -H "Content-Type: application/json" -A "omarchy-pigeon/1.0" -K /dev/fd/4); '
       + 'if [[ -n ${PIGEON_AUTH:-} ]]; then exec 3< <(printf "Authorization: %s\\n" "$PIGEON_AUTH"); args+=(-H @/dev/fd/3); fi; '
-      + 'printf "%s" "$PIGEON_BODY" | curl "${args[@]}" -w \'\\n%{http_code}\' --data-binary @- -- "$1"',
-      "pigeon-publish", root.server]
+      + 'printf "%s" "$PIGEON_BODY" | curl "${args[@]}" -w \'\\n%{http_code}\' --data-binary @-']
     stdout: StdioCollector {
       id: publishOut
       waitForEnd: true
