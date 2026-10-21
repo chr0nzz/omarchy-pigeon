@@ -560,6 +560,7 @@ Panel {
             spacing: Style.space(2)
 
             Text {
+              textFormat: Text.PlainText
               text: "Pigeon"
               color: root.fg
               font.family: root.fontFamily
@@ -935,6 +936,7 @@ Panel {
           PanelSeparator { foreground: root.fg }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             wrapMode: Text.Wrap
             text: root.service && root.service.authIncomplete
@@ -946,6 +948,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             wrapMode: Text.Wrap
             text: "Press s or the gear to open settings, or from a terminal:\nomarchy bar set xyzlab.pigeon server https://ntfy.example.com\nomarchy bar set xyzlab.pigeon topics alerts,home"
@@ -956,6 +959,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: !root.settingsOpen && root.configured && root.service && root.service.status === "error" && root.service.lastError !== ""
           width: parent.width
           wrapMode: Text.Wrap
@@ -1141,6 +1145,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: root.rows.length === 0 && root.configured && !root.settingsOpen
           width: parent.width
           wrapMode: Text.Wrap

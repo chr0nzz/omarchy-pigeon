@@ -89,6 +89,27 @@ test("authHeader builds bearer and basic headers", () => {
   assert.equal(Model.authHeader(undefined, "tk"), "")
 })
 
+test("pickCursors keeps only allowed topics with a positive time", () => {
+  const raw = { alerts: 100, home: "200", evil: 1, "a/b": 5, zero: 0, junk: "x" }
+  assert.deepEqual(Model.pickCursors(raw, ["alerts", "home", "zero", "junk", "a/b", "missing"]), { alerts: 100, home: 200 })
+  assert.deepEqual(Model.pickCursors(raw, []), {})
+  assert.deepEqual(Model.pickCursors(null, ["alerts"]), {})
+  assert.deepEqual(Model.pickCursors([1, 2], ["0"]), {})
+  assert.deepEqual(Model.pickCursors({ __proto__: { inherited: 5 } }, ["inherited"]), {})
+})
+
+test("lastKeys keeps the most recent entries", () => {
+  assert.deepEqual(Model.lastKeys({ a: 1, b: 2, c: 3 }, 2), { b: 2, c: 3 })
+  assert.deepEqual(Model.lastKeys({ a: 1 }, 5), { a: 1 })
+  assert.deepEqual(Model.lastKeys(null, 5), {})
+  assert.deepEqual(Model.lastKeys([1], 5), {})
+  const big = {}
+  for (let i = 0; i < 5000; i++) big["k" + i] = true
+  const kept = Model.lastKeys(big, Model.LIMITS.tombstones)
+  assert.equal(Object.keys(kept).length, 1000)
+  assert.ok(kept.k4999 && !kept.k3999)
+})
+
 test("sinceParam prefers the cursor and falls back to the backfill window", () => {
   assert.equal(Model.sinceParam(1700000000.9, "12h"), "1700000000")
   assert.equal(Model.sinceParam(0, "12h"), "12h")

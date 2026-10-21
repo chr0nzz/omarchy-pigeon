@@ -235,6 +235,7 @@ CursorSurface {
           sourceSize.height: 1200
 
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             visible: preview.status === Image.Loading || (row.expanded && row.isImage && row.previewSource === "")
             text: "Loading preview…"

@@ -160,8 +160,8 @@ Anything past a limit is cut, an oversized stream line is dropped.
 | Path | Content |
 | --- | --- |
 | `~/.config/omarchy/shell.json` | Settings, including credentials |
-| `~/.local/state/omarchy/pigeon/state.json` | Inbox, read state, per-topic cursors, deleted ids |
-| `~/.cache/omarchy/pigeon/previews/` | Downloaded image previews, emptied when the shell starts |
+| `~/.local/state/omarchy/pigeon/state.json` | Inbox, read state, per-topic cursors, deleted ids. Readable only by you |
+| `~/.cache/omarchy/pigeon/previews/` | Downloaded image previews, emptied when the shell starts. Readable only by you |
 
 ## Contributing
 

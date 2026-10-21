@@ -190,7 +190,8 @@ Item {
 
   Process {
     id: mkdirProc
-    command: ["mkdir", "-p", root.stateDir]
+    command: ["bash", "-c", 'mkdir -p -- "$1" && chmod 700 -- "$1" && { umask 077; [[ -e $1/state.json ]] || : > "$1/state.json"; chmod 600 -- "$1/state.json"; }',
+      "pigeon-state", root.stateDir]
     onExited: root.dirReady = true
   }
 
@@ -207,17 +208,17 @@ Item {
     var parsed = null
     try { parsed = JSON.parse(String(raw || "")) } catch (e) { parsed = null }
     if (parsed && typeof parsed === "object") {
+      subscribedTopics = Model.parseTopics(Array.isArray(parsed.subscribedTopics) ? parsed.subscribedTopics : [])
       var list = Array.isArray(parsed.messages) ? parsed.messages : []
       var cleaned = []
       for (var i = 0; i < list.length; i++) {
         var m = list[i]
-        if (m && m.id) cleaned.push(m)
+        if (m && m.id && (!subscribedTopics.length || subscribedTopics.indexOf(m.topic) !== -1)) cleaned.push(m)
       }
       messages = cleaned.slice(0, maxMessages)
       cursorTime = Number(parsed.cursorTime || 0)
-      cursors = Util.isPlainObject(parsed.cursors) ? parsed.cursors : {}
-      subscribedTopics = Array.isArray(parsed.subscribedTopics) ? parsed.subscribedTopics : []
-      tombstones = Util.isPlainObject(parsed.tombstones) ? parsed.tombstones : {}
+      cursors = Model.pickCursors(parsed.cursors, subscribedTopics.length ? subscribedTopics : topics)
+      tombstones = Model.lastKeys(parsed.tombstones, Model.LIMITS.tombstones)
       muteUntil = Number(parsed.muteUntil || 0)
       if (muteUntil > 0 && muteUntil < Date.now()) muteUntil = 0
     }
@@ -426,6 +427,7 @@ Item {
     var id = String(raw.id || "")
     if (!id || tombstones[id] === true) return
     var topic = String(raw.topic || "")
+    if (topics.indexOf(topic) === -1) return
     var cursor = Number(cursors[topic] || 0)
     var time = Number(raw.time || 0)
     var snap = Number(streamCursors[topic] || 0)
@@ -510,13 +512,11 @@ Item {
   }
 
   function rememberToast(id, tag) {
-    toastTags = toastTags.concat([tag]).slice(-50)
-    if (id) {
-      var next = {}
-      for (var k in toastByMessage) next[k] = toastByMessage[k]
-      next[id] = tag
-      toastByMessage = next
-    }
+    toastTags = toastTags.concat([tag]).slice(-Model.LIMITS.toasts)
+    var next = {}
+    for (var k in toastByMessage) if (toastTags.indexOf(toastByMessage[k]) !== -1) next[k] = toastByMessage[k]
+    if (id) next[id] = tag
+    toastByMessage = next
   }
 
   function sendToast(msg) {
@@ -662,7 +662,7 @@ Item {
   function bury(ids) {
     var next = {}
     var keys = Object.keys(tombstones)
-    var start = Math.max(0, keys.length + ids.length - 1000)
+    var start = Math.max(0, keys.length + ids.length - Model.LIMITS.tombstones)
     for (var i = start; i < keys.length; i++) next[keys[i]] = true
     for (var j = 0; j < ids.length; j++) next[ids[j]] = true
     tombstones = next
@@ -737,7 +737,7 @@ Item {
 
   property bool previewDirReady: false
   property var previews: ({})
-  property var previewFiles: []
+  property var previewOrder: []
   property string previewPending: ""
 
   function previewState(url) {
@@ -776,16 +776,14 @@ Item {
 
   function finishPreview(url, path, ok) {
     setPreview(url, { state: ok ? "ready" : "failed", path: path })
-    if (ok) {
-      var files = previewFiles.concat([url])
-      while (files.length > Model.LIMITS.previews) {
-        var old = files.shift()
-        var gone = previews[old]
-        setPreview(old, null)
-        if (gone) Quickshell.execDetached(["rm", "-f", "--", gone.path])
-      }
-      previewFiles = files
+    var order = previewOrder.filter(function(u) { return u !== url }).concat([url])
+    while (order.length > Model.LIMITS.previews) {
+      var old = order.shift()
+      var gone = previews[old]
+      setPreview(old, null)
+      if (gone && gone.state === "ready") Quickshell.execDetached(["rm", "-f", "--", gone.path])
     }
+    previewOrder = order
     fetchPendingPreview()
   }
 
@@ -797,7 +795,7 @@ Item {
 
   Process {
     id: previewDirProc
-    command: ["bash", "-c", 'mkdir -p -- "$1" && rm -f -- "$1"/*', "pigeon-previews", root.previewDir]
+    command: ["bash", "-c", 'mkdir -p -- "$1" && chmod 700 -- "${1%/*}" "$1" && rm -f -- "$1"/*', "pigeon-previews", root.previewDir]
     onExited: {
       root.previewDirReady = true
       root.fetchPendingPreview()
@@ -810,7 +808,7 @@ Item {
     property string path: ""
     environment: ({ PIGEON_URL: Model.curlUrlConfig(url) })
     command: ["bash", "-c",
-      'set -o pipefail; max=$1; out=$2; '
+      'set -o pipefail; umask 077; max=$1; out=$2; '
       + '[[ -n ${PIGEON_URL:-} ]] || exit 1; exec 4< <(printf "%s" "$PIGEON_URL"); '
       + 'curl -sS -f -g -L --max-redirs 3 --proto =http,https --proto-redir =http,https --connect-timeout 15 --max-time 60 --max-filesize "$max" -A "omarchy-pigeon/1.0" -K /dev/fd/4 '
       + '| head -c "$(( max + 1 ))" > "$out.part" '
@@ -839,7 +837,7 @@ Item {
     var next = {}
     for (var k in actionStates) next[k] = actionStates[k]
     next[key] = value
-    actionStates = next
+    actionStates = Model.lastKeys(next, Model.LIMITS.actionStates)
   }
 
   function runAction(msg, index) {
@@ -962,7 +960,7 @@ Item {
             var next = {}
             for (var k in root.ownIds) next[k] = root.ownIds[k]
             next[String(sent.id)] = true
-            root.ownIds = next
+            root.ownIds = Model.lastKeys(next, Model.LIMITS.ownIds)
           }
         } catch (e) {}
       }

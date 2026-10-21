@@ -19,7 +19,11 @@ var LIMITS = {
   headerValue: 1024,
   errorText: 1024,
   preview: 10485760,
-  previews: 16
+  previews: 16,
+  tombstones: 1000,
+  toasts: 50,
+  ownIds: 200,
+  actionStates: 50
 }
 
 function clip(value, max) {
@@ -122,6 +126,27 @@ function parseTopics(value) {
 
 function validTopic(value) {
   return /^[-_A-Za-z0-9]{1,64}$/.test(String(value || ""))
+}
+
+function pickCursors(cursors, allowed) {
+  var out = {}
+  if (!cursors || typeof cursors !== "object" || Array.isArray(cursors)) return out
+  var list = toList(allowed)
+  for (var i = 0; i < list.length; i++) {
+    var t = String(list[i])
+    if (!validTopic(t) || !Object.prototype.hasOwnProperty.call(cursors, t)) continue
+    var v = Number(cursors[t])
+    if (isFinite(v) && v > 0) out[t] = v
+  }
+  return out
+}
+
+function lastKeys(map, max) {
+  var out = {}
+  if (!map || typeof map !== "object" || Array.isArray(map)) return out
+  var keys = Object.keys(map)
+  for (var i = Math.max(0, keys.length - max); i < keys.length; i++) out[keys[i]] = map[keys[i]]
+  return out
 }
 
 function authHeader(mode, token, username, password) {

@@ -18,8 +18,8 @@ Only the latest release on `main` receives fixes.
 | --- | --- | --- |
 | Server URL, topics, auth mode | `~/.config/omarchy/shell.json` | Written by the settings editor and `omarchy bar set` |
 | Access token, username, password | `~/.config/omarchy/shell.json` | Stored in plain text, same as every other widget setting. Protect the file with your user permissions |
-| Inbox, read state, cursors | `~/.local/state/omarchy/pigeon/state.json` | Full message bodies, plain text |
-| Image previews | `~/.cache/omarchy/pigeon/previews/` | Up to 16 downloaded attachments, emptied when the shell starts |
+| Inbox, read state, cursors | `~/.local/state/omarchy/pigeon/state.json` | Full message bodies, plain text. Directory `0700`, file `0600`, also applied to an existing install at startup |
+| Image previews | `~/.cache/omarchy/pigeon/previews/` | Up to 16 downloaded attachments, emptied when the shell starts. Directories `0700`, files `0600` |
 | Clipboard | `wl-copy` | Only when you press `y` or click Copy |
 | Audio | `pw-play` or `aplay` | Only when `sound` is on, plays the bundled chime |
 
@@ -39,6 +39,7 @@ Only `http` and `https` URLs are ever opened or fetched. Anything else from a me
 Topic names are limited to `[A-Za-z0-9_-]` so a message or setting cannot change the request path.
 Request bodies reach `curl` on stdin and header names are limited to token characters, so `@file` and other `curl` syntax in a message can never read a local file.
 QML never loads a remote URL. Image previews are downloaded by `curl` into the cache with a 10 MiB cap, enforced by `--max-filesize` and again by `head -c`, a 60 second timeout, and `http`/`https` only across redirects. The preview `Image` only reads that local file, decodes at no more than 1200 px a side without upscaling, and Qt rejects any image that would need more than 256 MB to decode.
+A message for a topic you did not configure is dropped before it touches the inbox or the cursors, and saved state is filtered the same way when it is loaded. Deleted ids, toast tags, action states, and preview entries are capped, so nothing the server sends grows memory or `state.json` past a fixed size.
 A bounded reader sits between `curl` and the shell: stream lines over 64 KiB are dropped before they reach QML, a line with no end within 1 MiB ends the connection, and every message field is cut to a fixed size before it is kept. The limits are listed in the [README](README.md#limits).
 
 ## Command lines
@@ -64,7 +65,7 @@ Toast bodies are escaped so a message can never add markup to the toast.
 - The ntfy server and anyone who can publish to your topics control message content, links, attachments, and actions. An unprotected topic name is a public address.
 - `http` actions run a request from your machine to a publisher chosen URL with publisher chosen method, headers, and body. Keep `allowHttpActions` off unless you trust every publisher on every topic.
 - The `omarchy-shell pigeon` IPC commands are available to any process running as your user. Text given to `omarchy-shell pigeon publish` is part of that command's own arguments.
-- Message text is rendered as plain text, never as rich text or markdown.
+- Message text, server errors, and every other string Pigeon shows are rendered as plain text, never as rich text or markdown. `tests/qml.test.js` fails if any `Text` lacks `textFormat: Text.PlainText`.
 
 ## Out of scope
 

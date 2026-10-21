@@ -24,7 +24,7 @@ Edits hot-reload. If a change does not apply, run `omarchy restart shell`.
 | `sounds/pigeon.wav` | The chime |
 | `Model.js` | Pure logic: parsing, priorities, tags, URLs, time formatting |
 | `Emojis.js` | ntfy emoji tag table |
-| `tests/` | Node tests for `Model.js` and `Emojis.js` |
+| `tests/` | Node tests for `Model.js` and `Emojis.js`, and a check that every `Text` is plain text |
 
 ## Tests
 
@@ -42,7 +42,8 @@ Add or update a test for every change to `Model.js` or `Emojis.js`. QML changes 
 - Match the shell: build on `KeyboardPanel`, `CursorSurface`, `Button`, `TextField`, and `ConfirmDialog`, and take colours, spacing, and fonts from the theme. Do not invent new styles.
 - Only `curl`, `jq`, `wl-copy`, `python3` with `python-gobject` for `toast.py`, and `pw-play` or `aplay` for the chime may be called. All ship with Omarchy. No new runtime dependencies.
 - Credentials, URLs, and message content go to child processes through the environment, never on the command line. Do not expand them into an argument either: pass headers to `curl` with `-H @/dev/fd/3` and the URL with `-K /dev/fd/4` built by `Model.curlUrlConfig`, each fed by `exec N< <(printf ...)`, and bodies, copied text, or toasts on stdin.
-- Anything from a message is untrusted. Render it as plain text and pass URLs through `Model.safeHttpUrl`.
+- Anything from a message or the server is untrusted. Give every `Text` `textFormat: Text.PlainText`, which `npm test` checks, and pass URLs through `Model.safeHttpUrl`.
+- Anything keyed by server data is capped. Add a limit to `Model.LIMITS` instead of letting a map grow.
 - Keep docs short. Prefer a table to a paragraph. Describe what a thing does, not why.
 
 ## Pull requests
