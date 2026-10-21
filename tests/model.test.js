@@ -190,6 +190,49 @@ test("displayTitle, toastTitle and toastBody", () => {
   assert.equal(Model.toastBody(msg({ message: "" })), "")
 })
 
+test("toastTag is zero width, fixed length and distinct per serial", () => {
+  const a = Model.toastTag(1)
+  assert.match(a, /^[​‌]{16}$/)
+  assert.notEqual(Model.toastTag(2), a)
+  assert.equal(Model.toastTag(65537), a)
+  assert.equal(Model.toastTag("junk"), Model.toastTag(0))
+})
+
+test("escapeMarkup keeps toast bodies plain text", () => {
+  assert.equal(Model.escapeMarkup('<b>a</b> & <img src="http://x">'), '&lt;b&gt;a&lt;/b&gt; &amp; &lt;img src="http://x"&gt;')
+  assert.equal(Model.escapeMarkup(null), "")
+})
+
+test("toastRequest carries the content, a tag for dismissal and nothing private in the fallback", () => {
+  const tag = Model.toastTag(7)
+  const r = Model.toastRequest(msg({ title: "Disk full", message: "<b>95%</b>", tags: ["warning"], priority: 5,
+    attachment: { name: "df.txt" } }), "xyzlab.pigeon", tag)
+  assert.equal(r.summary, "⚠️ Disk full" + tag)
+  assert.equal(r.body, "&lt;b&gt;95%&lt;/b&gt;\n󰁦 df.txt")
+  assert.equal(r.glyph, "⚠️")
+  assert.equal(r.urgency, 2)
+  assert.deepEqual(r.exec, ["omarchy-shell", "shell", "summon", "xyzlab.pigeon", "{}"])
+  assert.equal(r.replaces, 0)
+  assert.equal(r.fallback, "New message" + tag)
+  const low = Model.toastRequest(msg({ priority: 2, click: "https://x/y" }), "p", "")
+  assert.equal(low.urgency, 0)
+  assert.equal(low.glyph, "󰂚")
+  assert.deepEqual(low.exec, ["omarchy-launch-browser", "https://x/y"])
+  assert.equal(Model.toastRequest(msg({ priority: 3, click: "file:///etc" }), "p", "").exec[0], "omarchy-shell")
+  assert.equal(Model.toastRequest(msg({ priority: 3 }), "p", "").urgency, 1)
+})
+
+test("summaryToastRequest counts messages and replaces the previous summary", () => {
+  const tag = Model.toastTag(3)
+  const r = Model.summaryToastRequest(4, ["a<b", "c"], 4, "xyzlab.pigeon", tag, 12)
+  assert.equal(r.summary, "4 new messages" + tag)
+  assert.equal(r.body, "a&lt;b\nc\nand 2 more")
+  assert.equal(r.urgency, 2)
+  assert.equal(r.replaces, 12)
+  assert.equal(r.fallback, "4 new messages" + tag)
+  assert.equal(Model.summaryToastRequest(2, [], 3, "p", "", 0).replaces, 0)
+})
+
 test("truncate keeps short text and ends long text with an ellipsis", () => {
   assert.equal(Model.truncate("short", 10), "short")
   const out = Model.truncate("a".repeat(50), 10)

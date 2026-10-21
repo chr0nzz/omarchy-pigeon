@@ -20,6 +20,7 @@ Edits hot-reload. If a change does not apply, run `omarchy restart shell`.
 | `Panel.qml` | The popup inbox and the settings editor |
 | `components/MessageRow.qml` | One inbox row |
 | `components/TopicStrip.qml` | Topic pills that fit one line, used by the tabs and the compose box |
+| `toast.py` | Sends one toast over D-Bus, read as JSON from stdin, prints the notification id |
 | `sounds/pigeon.wav` | The chime |
 | `Model.js` | Pure logic: parsing, priorities, tags, URLs, time formatting |
 | `Emojis.js` | ntfy emoji tag table |
@@ -39,8 +40,8 @@ Add or update a test for every change to `Model.js` or `Emojis.js`. QML changes 
 - No code comments, in any language. Name things so they explain themselves.
 - No em dashes anywhere: code, docs, commit messages. Use a comma, a hyphen, or a full stop.
 - Match the shell: build on `KeyboardPanel`, `CursorSurface`, `Button`, `TextField`, and `ConfirmDialog`, and take colours, spacing, and fonts from the theme. Do not invent new styles.
-- Only `curl`, `jq`, `wl-copy`, and `pw-play` or `aplay` for the chime may be called. No new runtime dependencies.
-- Credentials, URLs, and message content go to child processes through the environment, never on the command line. Do not expand them into an argument either: pass headers to `curl` with `-H @/dev/fd/3` and the URL with `-K /dev/fd/4` built by `Model.curlUrlConfig`, each fed by `exec N< <(printf ...)`, and bodies or copied text on stdin.
+- Only `curl`, `jq`, `wl-copy`, `python3` with `python-gobject` for `toast.py`, and `pw-play` or `aplay` for the chime may be called. All ship with Omarchy. No new runtime dependencies.
+- Credentials, URLs, and message content go to child processes through the environment, never on the command line. Do not expand them into an argument either: pass headers to `curl` with `-H @/dev/fd/3` and the URL with `-K /dev/fd/4` built by `Model.curlUrlConfig`, each fed by `exec N< <(printf ...)`, and bodies, copied text, or toasts on stdin.
 - Anything from a message is untrusted. Render it as plain text and pass URLs through `Model.safeHttpUrl`.
 - Keep docs short. Prefer a table to a paragraph. Describe what a thing does, not why.
 

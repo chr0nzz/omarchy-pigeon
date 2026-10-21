@@ -51,13 +51,13 @@ Other local accounts can read process command lines with `ps` or `/proc/<pid>/cm
 | Request URLs, including topic names | Environment, then a `curl` config on an inherited pipe read with `-K /dev/fd/4` |
 | Publish and action bodies | Environment, then `curl` stdin |
 | Copied message text | Environment, then `wl-copy` stdin. The variable is removed before `wl-copy` starts |
+| Toast headline and body | Environment, then `toast.py` stdin. The variable is removed before `python3` starts, and `toast.py` sends the D-Bus `Notify` call itself through Gio |
+| Toast dismissal | A random 16 character zero-width tag at the end of each toast headline. `omarchy-shell notifications dismiss` gets the tag, never the headline |
 
-Two paths still pass message data as arguments, because the programs they call only take arguments:
+If `python3` or `python-gobject` is missing, toasts fall back to `omarchy-notification-send` with only `New message` or `N new messages`.
 
-| Path | Arguments |
-| --- | --- |
-| Open link, open attachment, `view` action | The URL, to `omarchy-launch-browser` |
-| Toasts | Headline and body to `omarchy-notification-send`, which hands them to `busctl`, and the headline to `omarchy-shell notifications dismiss` once the message is read. Set `toasts` to `false` to avoid this |
+Opening a link, an attachment, or a `view` action still passes the URL as an argument to `omarchy-launch-browser`, because a browser only takes a URL that way.
+Toast bodies are escaped so a message can never add markup to the toast.
 
 ## Trust model
 
@@ -69,4 +69,4 @@ Two paths still pass message data as arguments, because the programs they call o
 ## Out of scope
 
 - The ntfy server itself. Report those to [binwiederhier/ntfy](https://github.com/binwiederhier/ntfy/security).
-- The Omarchy shell, `curl`, `jq`, or `wl-copy`.
+- The Omarchy shell, `curl`, `jq`, `wl-copy`, or `python-gobject`.

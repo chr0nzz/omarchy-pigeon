@@ -268,6 +268,48 @@ function toastSummary(count, titles) {
   return { title: n + " new " + (n === 1 ? "message" : "messages"), body: lines.join("\n") }
 }
 
+var URGENCY_BYTES = { low: 0, normal: 1, critical: 2 }
+
+function escapeMarkup(text) {
+  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+function toastTag(serial) {
+  var n = Math.abs(parseInt(serial, 10) || 0) % 65536
+  var out = ""
+  for (var i = 15; i >= 0; i--) out += (n >> i) & 1 ? "‌" : "​"
+  return out
+}
+
+function toastRequest(msg, pluginId, tag) {
+  var tags = splitTags(msg.tags)
+  var body = truncate(toastBody(msg), 400)
+  if (msg.attachment && msg.attachment.name) body = (body ? body + "\n" : "") + "󰁦 " + msg.attachment.name
+  var click = safeHttpUrl(msg.click)
+  return {
+    summary: toastTitle(msg) + tag,
+    body: escapeMarkup(body),
+    glyph: tags.emoji.length ? tags.emoji[0] : (msg.priority >= 4 ? priorityGlyph(msg.priority) : "󰂚"),
+    urgency: URGENCY_BYTES[urgencyFor(msg.priority)],
+    exec: click ? ["omarchy-launch-browser", click] : ["omarchy-shell", "shell", "summon", pluginId, "{}"],
+    replaces: 0,
+    fallback: "New message" + tag
+  }
+}
+
+function summaryToastRequest(count, titles, priority, pluginId, tag, replaces) {
+  var text = toastSummary(count, titles)
+  return {
+    summary: text.title + tag,
+    body: escapeMarkup(text.body),
+    glyph: priority >= 4 ? priorityGlyph(priority) : "󰂚",
+    urgency: URGENCY_BYTES[urgencyFor(priority)],
+    exec: ["omarchy-shell", "shell", "summon", pluginId, "{}"],
+    replaces: replaces > 0 ? replaces : 0,
+    fallback: text.title + tag
+  }
+}
+
 function truncate(text, max) {
   var s = String(text || "")
   if (s.length <= max) return s

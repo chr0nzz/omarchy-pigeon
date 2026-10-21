@@ -21,7 +21,7 @@ and an entry in a themed popup inbox.
 
 ## Requirements
 
-Omarchy 4 shell, `curl`, `jq`, `wl-copy`, and `pw-play` or `aplay` for the chime. All of them ship with Omarchy.
+Omarchy 4 shell, `curl`, `jq`, `wl-copy`, `python3` with `python-gobject` for toasts, and `pw-play` or `aplay` for the chime. All of them ship with Omarchy.
 
 ## Install
 

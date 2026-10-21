@@ -450,14 +450,18 @@ Item {
 
   property var toastBatch: []
   property double batchStartedAt: 0
-  property var toastHeadlines: []
+  property int toastSerial: 0
+  property var toastTags: []
   property var toastByMessage: ({})
+  property var toastQueue: []
   property int summaryToastId: 0
   property int summaryCount: 0
   property int summaryPriority: 0
   property var summaryTitles: []
-  property string summaryHeadline: ""
+  property string summaryTag: ""
+  property bool summarySending: false
   property bool summaryDirty: false
+  readonly property string toastScript: String(Qt.resolvedUrl("toast.py")).replace(/^file:\/\//, "")
 
   function maybeToast(msg) {
     if (!toastsEnabled || muted) return
@@ -500,89 +504,115 @@ Item {
     Quickshell.execDetached(["bash", "-c", 'if command -v pw-play >/dev/null 2>&1; then exec pw-play -- "$1"; fi; exec aplay -q -- "$1"', "pigeon-sound", soundPath])
   }
 
-  function rememberToast(id, headline) {
-    var list = toastHeadlines.concat([headline])
-    toastHeadlines = list.slice(-50)
+  function nextToastTag() {
+    toastSerial = (toastSerial + 1) % 65536
+    return Model.toastTag(toastSerial)
+  }
+
+  function rememberToast(id, tag) {
+    toastTags = toastTags.concat([tag]).slice(-50)
     if (id) {
       var next = {}
       for (var k in toastByMessage) next[k] = toastByMessage[k]
-      next[id] = headline
+      next[id] = tag
       toastByMessage = next
     }
   }
 
   function sendToast(msg) {
-    var tags = Model.splitTags(msg.tags)
-    var glyph = tags.emoji.length ? tags.emoji[0] : (msg.priority >= 4 ? Model.priorityGlyph(msg.priority) : "󰂚")
-    var title = Model.toastTitle(msg)
-    var body = Model.truncate(Model.toastBody(msg), 400)
-    if (msg.attachment && msg.attachment.name) body = (body ? body + "\n" : "") + "󰁦 " + msg.attachment.name
-    var argv = ["omarchy-notification-send", "--app-name", "Pigeon", "-g", glyph, "-u", Model.urgencyFor(msg.priority), title, body, "--exec"]
-    var click = Model.safeHttpUrl(msg.click)
-    if (click) argv = argv.concat(["omarchy-launch-browser", click])
-    else argv = argv.concat(["omarchy-shell", "shell", "summon", pluginId, "{}"])
-    rememberToast(msg.id, title)
-    Quickshell.execDetached(argv)
+    var tag = nextToastTag()
+    rememberToast(msg.id, tag)
+    queueToast(Model.toastRequest(msg, pluginId, tag), null)
   }
 
   function sendSummaryToast() {
-    if (summaryProc.running) {
+    if (summarySending) {
       summaryDirty = true
       return
     }
     summaryDirty = false
-    var text = Model.toastSummary(summaryCount, summaryTitles)
-    summaryHeadline = text.title
-    var glyph = summaryPriority >= 4 ? Model.priorityGlyph(summaryPriority) : "󰂚"
-    var argv = ["omarchy-notification-send", "-p", "--app-name", "Pigeon", "-g", glyph, "-u", Model.urgencyFor(summaryPriority)]
-    if (summaryToastId > 0) argv = argv.concat(["-r", String(summaryToastId)])
-    argv = argv.concat([text.title, text.body, "--exec", "omarchy-shell", "shell", "summon", pluginId, "{}"])
-    summaryProc.command = argv
-    summaryProc.running = true
+    summarySending = true
+    if (!summaryTag) summaryTag = nextToastTag()
+    var request = Model.summaryToastRequest(summaryCount, summaryTitles, summaryPriority, pluginId, summaryTag, summaryToastId)
+    queueToast(request, function(id) {
+      root.summarySending = false
+      if (id > 0) root.summaryToastId = id
+      if (root.summaryDirty) root.sendSummaryToast()
+    })
+  }
+
+  function queueToast(request, done) {
+    toastQueue = toastQueue.concat([{ request: request, done: done }])
+    runToastQueue()
+  }
+
+  function runToastQueue() {
+    if (toastProc.running || !toastQueue.length) return
+    var next = toastQueue[0]
+    toastQueue = toastQueue.slice(1)
+    toastProc.request = next.request
+    toastProc.done = next.done
+    toastProc.running = true
+  }
+
+  function fallbackToast(request) {
+    Quickshell.execDetached(["omarchy-notification-send", "--app-name", "Pigeon", "-g", "󰂚", "-u", ["low", "normal", "critical"][request.urgency] || "normal",
+      request.fallback, "--exec", "omarchy-shell", "shell", "summon", pluginId, "{}"])
   }
 
   Process {
-    id: summaryProc
+    id: toastProc
+    property var request: null
+    property var done: null
+    environment: ({ PIGEON_TOAST: request ? JSON.stringify(request) : "" })
+    command: ["bash", "-c", 'printf "%s" "$PIGEON_TOAST" | { unset PIGEON_TOAST; exec python3 -I "$1"; }', "pigeon-toast", root.toastScript]
     stdout: StdioCollector {
-      id: summaryOut
+      id: toastOut
       waitForEnd: true
     }
     onExited: function(exitCode) {
-      var id = parseInt(String(summaryOut.text || "").trim(), 10)
-      if (exitCode === 0 && id > 0) root.summaryToastId = id
-      if (root.summaryDirty) root.sendSummaryToast()
+      var id = exitCode === 0 ? parseInt(String(toastOut.text || "").trim(), 10) || 0 : 0
+      if (!(id > 0) && request) root.fallbackToast(request)
+      var finished = done
+      request = null
+      done = null
+      if (finished) finished(id)
+      root.runToastQueue()
     }
   }
 
-  function dismissToast(headline) {
-    if (!headline) return
-    Quickshell.execDetached(["omarchy-shell", "-q", "notifications", "dismiss", headline])
+  function dismissToast(tag) {
+    if (!tag) return
+    Quickshell.execDetached(["omarchy-shell", "-q", "notifications", "dismiss", tag])
   }
 
   function dismissToastFor(id) {
-    var headline = toastByMessage[id]
-    if (!headline) return
+    var tag = toastByMessage[id]
+    if (!tag) return
     var next = {}
     for (var k in toastByMessage) if (k !== id) next[k] = toastByMessage[k]
     toastByMessage = next
-    toastHeadlines = toastHeadlines.filter(function(h) { return h !== headline })
-    dismissToast(headline)
+    toastTags = toastTags.filter(function(t) { return t !== tag })
+    dismissToast(tag)
   }
 
   function dismissAllToasts() {
     toastTimer.stop()
     toastBatch = []
-    var list = toastHeadlines
-    toastHeadlines = []
+    var list = toastTags
+    toastTags = []
     toastByMessage = {}
     for (var i = 0; i < list.length; i++) dismissToast(list[i])
-    if (summaryHeadline) dismissToast(summaryHeadline)
-    summaryHeadline = ""
+    if (summaryTag) dismissToast(summaryTag)
+    summaryTag = ""
     summaryToastId = 0
     summaryCount = 0
     summaryPriority = 0
     summaryTitles = []
     summaryDirty = false
+    var queued = toastQueue
+    toastQueue = []
+    for (var q = 0; q < queued.length; q++) if (queued[q].done) queued[q].done(0)
   }
 
   function messageById(id) {
