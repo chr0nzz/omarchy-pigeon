@@ -18,6 +18,7 @@ and an entry in a themed popup inbox.
 - Optional chime with each toast
 - IPC for scripts through `omarchy-shell`
 - Inbox and read state survive shell restarts
+- Marking messages read clears them on the ntfy server, so other ntfy clients show them read. Clears from other clients are applied here
 
 ## Requirements
 
