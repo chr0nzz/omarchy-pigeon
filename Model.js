@@ -23,7 +23,8 @@ var LIMITS = {
   tombstones: 1000,
   toasts: 50,
   ownIds: 200,
-  actionStates: 50
+  actionStates: 50,
+  clearQueue: 200
 }
 
 function clip(value, max) {
@@ -215,6 +216,7 @@ function normalizeMessage(raw, unread) {
   }
   return {
     id: clip(id, LIMITS.name),
+    sequenceId: clip(raw.sequence_id || id, LIMITS.name),
     time: Number(raw.time || 0),
     expires: Number(raw.expires || 0),
     topic: clip(raw.topic, LIMITS.tag),
@@ -423,6 +425,17 @@ function safeHttpUrl(url) {
   return /^https?:\/\//i.test(s) ? s : ""
 }
 
+function sequenceOf(msg) {
+  return String((msg && (msg.sequenceId || msg.id)) || "")
+}
+
+function clearUrl(server, topic, sequenceId) {
+  var base = String(server || "").replace(/\/+$/, "")
+  var seq = String(sequenceId || "")
+  if (!safeHttpUrl(base) || !validTopic(topic) || !seq) return ""
+  return base + "/" + String(topic) + "/" + encodeURIComponent(seq) + "/clear"
+}
+
 function curlUrlConfig(url) {
   var s = safeHttpUrl(url)
   if (!s || /[\x00-\x1f\x7f]/.test(s)) return ""
@@ -440,6 +453,7 @@ function parseStreamLine(line) {
   if (obj.event === "message") return { kind: "message", data: obj }
   if (obj.event === "open") return { kind: "open" }
   if (obj.event === "keepalive") return { kind: "keepalive" }
+  if (obj.event === "message_clear") return { kind: "clear", topic: String(obj.topic || ""), sequenceId: String(obj.sequence_id || "") }
   if (obj.error || obj.http) return { kind: "error", data: obj }
   return { kind: "other", data: obj }
 }

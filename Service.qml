@@ -415,6 +415,9 @@ Item {
     case "overflow":
       lastError = "Dropped an oversized message"
       break
+    case "clear":
+      applyRemoteClear(parsed.sequenceId, parsed.topic)
+      break
     case "exit":
       if (parsed.http) lastHttpCode = parsed.http
       break
@@ -620,8 +623,64 @@ Item {
     return null
   }
 
+  property var clearQueue: []
+
+  function queueClears(list) {
+    if (!server || authIncomplete) return
+    var jobs = []
+    for (var i = 0; i < list.length; i++) {
+      var seq = Model.sequenceOf(list[i])
+      if (seq && Model.clearUrl(server, list[i].topic, seq)) jobs.push({ topic: list[i].topic, sequenceId: seq })
+    }
+    if (!jobs.length) return
+    clearQueue = clearQueue.concat(jobs).slice(-Model.LIMITS.clearQueue)
+    runNextClear()
+  }
+
+  function runNextClear() {
+    while (!clearProc.running && clearQueue.length) {
+      var job = clearQueue[0]
+      clearQueue = clearQueue.slice(1)
+      var config = Model.curlUrlConfig(Model.clearUrl(server, job.topic, job.sequenceId))
+      if (!config) continue
+      clearProc.urlConfig = config
+      clearProc.running = true
+    }
+  }
+
+  Process {
+    id: clearProc
+    property string urlConfig: ""
+    environment: ({ PIGEON_AUTH: root.authHeader, PIGEON_URL: urlConfig })
+    command: ["bash", "-c",
+      '[[ -n ${PIGEON_URL:-} ]] || exit 2; exec 4< <(printf "%s" "$PIGEON_URL"); '
+      + 'args=(-sS -g -X PUT -o /dev/null --connect-timeout 15 --max-time 30 -A "omarchy-pigeon/1.0" -K /dev/fd/4); '
+      + 'if [[ -n ${PIGEON_AUTH:-} ]]; then exec 3< <(printf "Authorization: %s\\n" "$PIGEON_AUTH"); args+=(-H @/dev/fd/3); fi; '
+      + 'curl "${args[@]}"']
+    onExited: function(exitCode) { root.runNextClear() }
+  }
+
+  function applyRemoteClear(sequenceId, topic) {
+    var changed = false
+    var ids = []
+    var next = messages.map(function(m) {
+      if (!m || !m.unread || m.topic !== topic || Model.sequenceOf(m) !== sequenceId) return m
+      changed = true
+      ids.push(m.id)
+      var copy = Util.cloneJson(m)
+      copy.unread = false
+      return copy
+    })
+    if (!changed) return
+    messages = next
+    for (var i = 0; i < ids.length; i++) dismissToastFor(ids[i])
+    recount()
+    scheduleSave()
+  }
+
   function markRead(id, read) {
     var changed = false
+    var cleared = []
     var next = messages.map(function(m) {
       if (!m || m.id !== id) return m
       var want = read !== false
@@ -629,6 +688,7 @@ Item {
       changed = true
       var copy = Util.cloneJson(m)
       copy.unread = !want
+      if (want) cleared.push(copy)
       return copy
     })
     if (!changed) return
@@ -636,16 +696,19 @@ Item {
     if (read !== false) dismissToastFor(id)
     recount()
     scheduleSave()
+    queueClears(cleared)
   }
 
   function markAllRead(topic) {
     var changed = false
+    var cleared = []
     var next = messages.map(function(m) {
       if (!m || !m.unread) return m
       if (topic && m.topic !== topic) return m
       changed = true
       var copy = Util.cloneJson(m)
       copy.unread = false
+      cleared.push(copy)
       return copy
     })
     if (!changed) return
@@ -657,6 +720,7 @@ Item {
     }
     recount()
     scheduleSave()
+    queueClears(cleared)
   }
 
   function bury(ids) {

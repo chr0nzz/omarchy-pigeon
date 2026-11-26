@@ -136,7 +136,7 @@ test("normalizeMessage drops non-message events and messages without id", () => 
 test("normalizeMessage produces the inbox shape with safe defaults", () => {
   const out = Model.normalizeMessage({ event: "message", id: 42, topic: "alerts", message: "hi" })
   assert.deepEqual(out, {
-    id: "42", time: 0, expires: 0, topic: "alerts", title: "", message: "hi", priority: 3,
+    id: "42", sequenceId: "42", time: 0, expires: 0, topic: "alerts", title: "", message: "hi", priority: 3,
     tags: [], click: "", icon: "", contentType: "", attachment: null, actions: [], unread: true
   })
 })
@@ -489,4 +489,27 @@ test("httpMethod accepts letters only and falls back to POST", () => {
   assert.equal(Model.httpMethod("GET HTTP/1.1"), "POST")
   assert.equal(Model.httpMethod(""), "POST")
   assert.equal(Model.httpMethod("A".repeat(17)), "POST")
+})
+
+test("parseStreamLine classifies message_clear events", () => {
+  assert.deepEqual(Model.parseStreamLine('{"event":"message_clear","topic":"alerts","sequence_id":"abc"}'), { kind: "clear", topic: "alerts", sequenceId: "abc" })
+})
+
+test("clearUrl builds the ntfy clear path and rejects bad input", () => {
+  assert.equal(Model.clearUrl("https://ntfy.example/", "alerts", "abc"), "https://ntfy.example/alerts/abc/clear")
+  assert.equal(Model.clearUrl("https://ntfy.example", "alerts", "a b/c"), "https://ntfy.example/alerts/a%20b%2Fc/clear")
+  assert.equal(Model.clearUrl("ftp://ntfy.example", "alerts", "abc"), "")
+  assert.equal(Model.clearUrl("https://ntfy.example", "bad topic", "abc"), "")
+  assert.equal(Model.clearUrl("https://ntfy.example", "alerts", ""), "")
+})
+
+test("sequenceOf prefers the sequence id and falls back to the message id", () => {
+  assert.equal(Model.sequenceOf({ id: "m1", sequenceId: "s1" }), "s1")
+  assert.equal(Model.sequenceOf({ id: "m1" }), "m1")
+  assert.equal(Model.sequenceOf(null), "")
+})
+
+test("normalizeMessage keeps the sequence id, defaulting to the message id", () => {
+  assert.equal(Model.normalizeMessage({ event: "message", id: "m1" }).sequenceId, "m1")
+  assert.equal(Model.normalizeMessage({ event: "message", id: "m1", sequence_id: "s1" }).sequenceId, "s1")
 })
